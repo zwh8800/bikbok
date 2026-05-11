@@ -418,6 +418,8 @@
 
     document.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('message', onMessage);
+
+    if (toggleBtn) toggleBtn.style.display = '';
   }
 
   /**
@@ -451,7 +453,7 @@
   toggleBtn.id = 'bikbok-toggle-btn';
   toggleBtn.textContent = 'TikTok Mode';
   toggleBtn.addEventListener('click', function () {
-    toggleBtn.remove();
+    toggleBtn.style.display = 'none';
     init();
   });
   document.body.appendChild(toggleBtn);
