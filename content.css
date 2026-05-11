@@ -1,3 +1,13 @@
+/* ============================================================
+ * bikbok — B 站 TikTok 模式 Chrome 扩展样式
+ * 
+ * 所有选择器均以 #bikbok-overlay 或 #bikbok-toggle-btn 为前缀，
+ * 使用命名空间隔离，防止污染 B 站页面原有样式。
+ * ============================================================ */
+
+/* ── 全屏覆盖层容器 ───────────────────────────────────────────
+ * 覆盖整个视口，背景纯黑，z-index: 999999 确保高于 B 站所有元素。
+ * flex 居中用于加载动画和消息提示的定位。 */
 #bikbok-overlay {
   position: fixed;
   inset: 0;
@@ -10,6 +20,8 @@
   transition: background 0.4s ease;
 }
 
+/* ── 播放器 iframe ────────────────────────────────────────────
+ * 占满整个覆盖层，object-fit: cover 保证视频内容裁剪适配 */
 #bikbok-overlay iframe {
   width: 100%;
   height: 100%;
@@ -18,6 +30,8 @@
   object-fit: cover;
 }
 
+/* ── 宽屏适配（16:9 及以上） ──────────────────────────────────
+ * 限制 iframe 最大宽度为 16:9 比例，避免超宽屏幕上视频过度拉伸 */
 @media (min-aspect-ratio: 16/9) {
   #bikbok-overlay iframe {
     width: auto;
@@ -25,6 +39,8 @@
   }
 }
 
+/* ── 视频标题栏 ───────────────────────────────────────────────
+ * 底部渐变遮罩，文字靠左底部，单行超出省略 */
 #bikbok-overlay .bikbok-title {
   position: absolute;
   bottom: 0;
@@ -44,6 +60,8 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── 视频计数器（右上角 "N / M"） ────────────────────────────
+ * 半透明深色背景，圆角胶囊形状，等宽字体 */
 #bikbok-overlay .bikbok-counter {
   position: absolute;
   top: 16px;
@@ -60,6 +78,8 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── 键盘操作提示 ────────────────────────────────────────────
+ * 居中位于底部偏上，半透明，用户首次操作后通过 .bikbok-hints-hidden 淡出 */
 #bikbok-overlay .bikbok-hints {
   position: absolute;
   bottom: 100px;
@@ -75,10 +95,13 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* 键盘提示隐藏（opacity 过渡渐隐） */
 #bikbok-overlay .bikbok-hints-hidden {
   opacity: 0;
 }
 
+/* ── 加载动画（旋转圆圈） ────────────────────────────────────
+ * 居中定位，通过 @keyframes bikbok-spin 实现持续旋转 */
 #bikbok-overlay .bikbok-loading {
   position: absolute;
   top: 50%;
@@ -92,10 +115,13 @@
   z-index: 3;
 }
 
+/* 加载完成/超时后隐藏加载动画 */
 #bikbok-overlay .bikbok-loading-hidden {
   display: none;
 }
 
+/* ── 旋转动画关键帧 ─────────────────────────────────────────
+ * 围绕自身中心旋转 360°，配合 translate(-50%, -50%) 实现居中旋转 */
 @keyframes bikbok-spin {
   from {
     transform: translate(-50%, -50%) rotate(0deg);
@@ -105,6 +131,8 @@
   }
 }
 
+/* ── 消息提示（加载失败 / 无推荐视频） ───────────────────────
+ * 居中显示，最大宽度 80vw 防止溢出，支持文字自动换行 */
 #bikbok-overlay .bikbok-message {
   position: absolute;
   top: 50%;
@@ -119,6 +147,8 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── 推荐列表结束提示 ────────────────────────────────────────
+ * 与 .bikbok-message 类似但更小、更淡，用于"已看完"场景 */
 #bikbok-overlay .bikbok-end {
   position: absolute;
   top: 50%;
@@ -133,6 +163,8 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── 重试按钮 ────────────────────────────────────────────────
+ * 半透明白色背景 + 白色边框，hover 时加深背景 */
 #bikbok-overlay .bikbok-retry {
   margin-top: 12px;
   padding: 8px 24px;
@@ -151,6 +183,10 @@
   background: rgba(255, 255, 255, 0.25);
 }
 
+/* ── 模式切换按钮（#bikbok-toggle-btn） ──────────────────────
+ * 固定右下角，粉色渐变，圆角胶囊形状，带阴影。
+ * hover 时放大 + 加深阴影，active 时缩小，微交互效果好。
+ * z-index: 999998 略低于覆盖层，确保覆盖层开启后不遮挡。 */
 #bikbok-toggle-btn {
   position: fixed;
   bottom: 24px;
