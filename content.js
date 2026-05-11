@@ -8,7 +8,7 @@
  * 整体流程：
  * 1. 从首页 DOM 中提取推荐视频列表（BV 编号 + 标题）
  * 2. 用户点击右下角「TikTok Mode」按钮进入全屏模式
- * 3. Arrow Up/Down/Left/Right 切换视频，Escape 退出
+ * 3. Arrow Up/Down 切换视频，Arrow Left/Right 透传给播放器快进/快退，F 切换浏览器全屏，Escape 退出
  * 4. 监听播放器 postMessage 实现视频播完自动前进
  * 5. 视频池耗尽时自动从 DOM 重新提取，若仍无新视频则点击「换一换」按钮刷新推荐
  */
@@ -392,7 +392,7 @@
 
     hintsEl = document.createElement('div');
     hintsEl.className = 'bikbok-hints';
-    hintsEl.textContent = '\u2191 \u2193 or \u2190 \u2192 to navigate';
+    hintsEl.textContent = '\u2191 \u2193 to switch, \u2190 \u2192 to seek';
 
     overlay.appendChild(hintsEl);
 
@@ -477,11 +477,16 @@
   }
 
   /**
-   * 完成加载：隐藏 loading 动画并显示 iframe
+   * 完成加载：隐藏 loading 动画、显示 iframe 并自动聚焦
+   * 聚焦 iframe 后键盘事件直接进入播放器，Space/←/→ 由 B 站播放器处理，
+   * Escape/↑/↓/F 由 iframe 内部捕获后通过 postMessage 转发父窗口。
    */
   function finishLoad() {
     if (loadingEl) loadingEl.classList.add('bikbok-loading-hidden');
-    if (iframe) iframe.style.opacity = '1';
+    if (iframe) {
+      iframe.style.opacity = '1';
+      iframe.focus();
+    }
   }
 
   /**
@@ -571,10 +576,11 @@
     }
 
     var doc = iframe.contentDocument;
-    // 在 iframe 内部捕获键盘事件并通过 postMessage 转发到父窗口
+    // 在 iframe 内部捕获导航/全屏按键并通过 postMessage 转发到父窗口
     // 解决同一源 iframe 抢走键盘焦点导致父文档 keydown 监听失效的问题
+    // Left/Right 不在列表中，直接透传给 B 站播放器处理快进/快退
     doc.addEventListener('keydown', function (e) {
-      var navKeys = ['Escape', 'ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'];
+      var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F'];
       if (navKeys.indexOf(e.key) !== -1) {
         window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
         e.preventDefault();
@@ -652,6 +658,22 @@
       } else {
         counterEl.style.display = 'none';
       }
+    }
+  }
+
+  /**
+   * 切换覆盖层的浏览器全屏状态
+   * 
+   * 全屏目标为 #bikbok-overlay 外层壳，而非内部 iframe。
+   * 使用标准 Fullscreen API（Chrome 无需 webkit 前缀）。
+   * 若全屏请求被拒绝则静默忽略。
+   */
+  function toggleFullscreen() {
+    if (!overlay) return;
+    if (document.fullscreenElement && document.fullscreenElement === overlay) {
+      document.exitFullscreen();
+    } else if (overlay.requestFullscreen) {
+      overlay.requestFullscreen().catch(function () {});
     }
   }
 
@@ -794,12 +816,13 @@
    * 全局键盘事件处理（capture 阶段捕获）
    * 
    * 按键映射：
-   *   Escape      — 退出全屏模式，恢复 B 站原始页面
+   *   Escape      — 若浏览器全屏激活则先退出全屏，否则退出 TikTok 模式
+   *   F           — 切换覆盖层浏览器全屏
    *   Space       — 不拦截，透传给 iframe 中的播放器（播放/暂停）
    *   Arrow Down  — 下一个视频
-   *   Arrow Right — 下一个视频
    *   Arrow Up    — 上一个视频
-   *   Arrow Left  — 上一个视频
+   *   Arrow Left  — 透传给播放器（快退）
+   *   Arrow Right — 透传给播放器（快进）
    * 
    * 防抖：300ms 内重复按键仅触发一次导航。
    * 空格键特殊处理：必须 return 而非 preventDefault，否则播放器无法切换播放状态。
@@ -807,11 +830,23 @@
    * @param {KeyboardEvent} e
    */
   function onKeyDown(e) {
-    // Escape：退出全屏模式
+    // Escape：退出 TikTok 模式。若当前处于浏览器全屏状态则先退出全屏
     if (e.key === 'Escape') {
+      if (document.fullscreenElement && document.fullscreenElement === overlay) {
+        // 浏览器全屏激活 → 让浏览器默认行为退出全屏，保持在 TikTok 模式中
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       cleanup();
+      return;
+    }
+
+    // F：切换外层全屏（覆盖层进入浏览器全屏，而非 iframe 内部网页全屏）
+    if (e.key === 'f' || e.key === 'F') {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFullscreen();
       return;
     }
 
@@ -830,13 +865,11 @@
 
     switch (e.key) {
       case 'ArrowDown':
-      case 'ArrowRight':
         lastNavTime = now;
         nextVideo();
         handled = true;
         break;
       case 'ArrowUp':
-      case 'ArrowLeft':
         lastNavTime = now;
         prevVideo();
         handled = true;
@@ -932,6 +965,11 @@
     if (autoAdvanceTimer !== null) {
       clearTimeout(autoAdvanceTimer);
       autoAdvanceTimer = null;
+    }
+
+    // 若覆盖层处于浏览器全屏状态，先退出全屏
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(function () {});
     }
 
     if (overlay && overlay.parentNode) {
