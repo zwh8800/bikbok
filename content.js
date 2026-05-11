@@ -38,7 +38,7 @@
    */
   function extractVideoCards() {
     // 选中页面上所有包含 "/video/BV" 的 <a> 标签
-    const links = document.querySelectorAll('a[href*="/video/BV"]');
+    const links = document.querySelectorAll('.feed-card a[href*="/video/BV"]');
     if (!links || links.length === 0) return [];
 
     const bvPattern = /\/video\/(BV[a-zA-Z0-9]+)/; // BV 编号正则
