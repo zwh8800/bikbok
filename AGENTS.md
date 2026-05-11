@@ -1,7 +1,7 @@
 # bikbok — B站 TikTok 模式 Chrome 插件
 
-**Generated:** 2026-05-11
-**Commit:** f0205be
+**Generated:** 2026-05-12
+**Commit:** 879d83c
 **Branch:** master
 
 ## OVERVIEW
@@ -12,11 +12,13 @@ Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。
 
 ```
 /
-├── manifest.json    # MV3 清单 — content_script 在 www.bilibili.com
-├── content.js       # 主逻辑 — 视频提取 / 全屏覆盖层 / 键盘导航
-├── content.css      # 深色全屏覆盖层 + 切换按钮样式
+├── manifest.json    # MV3 清单 — content_script 在 www.bilibili.com，无后台/popup/options
+├── content.js       # 主逻辑 (1054 行) — 视频提取 / 全屏覆盖层 / 键盘导航 / 全屏切换
+├── content.css      # 深色全屏覆盖层 + 切换按钮样式 (207 行)
+├── opencode.json    # OpenCode 编辑器 + chrome-devtools MCP 配置
 ├── icons/           # 扩展图标 (16/48/128px)
-└── opencode.json    # OpenCode 编辑器配置
+├── docs/            # 设计文档 + 测试用例
+└── .sisyphus/       # AI 工作流工具目录 (与扩展运行时无关)
 ```
 
 ## WHERE TO LOOK
@@ -26,10 +28,29 @@ Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。
 | 视频提取逻辑 | `content.js` → `extractVideoCards()` | 从 DOM `a[href*="/video/BV"]` 提取 BV ID |
 | 标题推断 | `content.js` → `inferTitle()` | 回退链: img[alt] → title 属性 → textContent → 卡片标题 → 父元素文本 → BV ID |
 | 页面隐藏 / 恢复 | `content.js` → `hidePage()` / `showPage()` | 保存原始 `display` 值，恢复时正确还原 |
-| 全屏覆盖层 | `content.js` → `createOverlay()` | iframe 嵌入 `player.bilibili.com/player.html` |
-| 键盘导航 | `content.js` → `onKeyDown()` | ↑↓←→ = 上一个/下一个，Escape = 退出，300ms 防抖 |
+| 全屏覆盖层 | `content.js` → `createOverlay()` | iframe 嵌入 `www.bilibili.com/video/BV{ID}/` |
+| 键盘导航 | `content.js` → `onKeyDown()` | ↑↓ = 上一个/下一个，Escape = 退出，300ms 防抖 |
+| 浏览器全屏切换 | `content.js` → `toggleFullscreen()` | F 键切换 overlay 外层浏览器全屏 |
+| 视频快进/快退 | `content.js` → `onKeyDown()` | ← → 透传给 B 站播放器 (seek) |
+| iframe 自动聚焦 | `content.js` → `finishLoad()` | 加载完成后自动聚焦 iframe，Space/←→ 即用 |
 | 视频结束自动前进 | `content.js` → `onMessage()` | 监听播放器的 postMessage `video_ended` |
 | 切换按钮 | `content.js` 末尾 + `content.css` → `#bikbok-toggle-btn` | 固定右下角粉红色按钮 |
+
+## CODE MAP
+
+| 函数 | 行 | 分类 | 作用 |
+|------|-----|------|------|
+| `init()` | ~1010 | 入口 | 进入 TikTok 全屏模式，编排隐藏页面→创建覆盖层→加载视频→绑定监听 |
+| `cleanup()` | ~955 | 退出 | 清除计时器→退出全屏→移除 DOM→恢复页面→解绑监听 |
+| `extractVideoCards()` | ~51 | 提取 | DOM 提取 BV ID + 标题，Set 去重 |
+| `ensureVideosAvailable()` | ~145 | 提取 | Refill 编排器：先 DOM 提取→再点击换一换，最多 3 次重试 |
+| `createOverlay()` | ~363 | UI | 构建 #bikbok-overlay 及所有子元素 (iframe/标题/计数/提示) |
+| `loadVideo(index)` | ~416 | 播放 | 核心加载器：设置 iframe.src→UI 更新→超时保护→自动前进回退 |
+| `setupPlayerInIframe(gen)` | ~571 | 播放 | 轮询触发网页全屏→注入隐藏样式→绑定 video.ended，带 gen 防过期 |
+| `onKeyDown(e)` | ~832 | 事件 | 键盘导航：Escape 退出 / F 全屏 / ↑↓ 切视频 / Space ← → 透传 |
+| `onMessage(e)` | ~902 | 事件 | postMessage 监听：视频结束自动前进 |
+| `toggleFullscreen()` | ~671 | 全屏 | F 键切换 overlay 浏览器全屏 |
+| `finishLoad()` | ~484 | 辅助 | 隐藏 loading → 显示 iframe → 自动聚焦 |
 
 ## CONVENTIONS
 
@@ -39,6 +60,10 @@ Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。
 - **IIFE + strict mode** — 所有代码包裹在 `(function () { 'use strict'; ... })();` 中
 - **textContent** — 所有用户可见文本均使用 `textContent` 设置（防止 XSS）
 - **原始 display 值恢复** — 隐藏元素时将 `node.style.display` 保存为 `{el, display}`，恢复时还原原始值
+- **Generation counter** — `iframeLoadGen` 用于异步竞态安全，所有回调检查 `gen === iframeLoadGen`
+- **按钮始终在 DOM** — `toggleBtn` 创建一次，仅通过 `display` 控制显隐，不 `remove()` 或重建
+- **postMessage 来源严格匹配** — `e.origin ===`（非 `startsWith`），精确校验播放器来源
+- **所有函数均有 JSDoc** — `@param` / `@returns` 文档注释覆盖全部函数
 
 ## ANTI-PATTERNS (本项目)
 
@@ -53,10 +78,11 @@ Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。
 ## UNIQUE STYLES
 
 - B 站首页通过 `HOME_PAGE_PATHS = new Set(['/', '/index.html'])` 检测
-- iframe 播放器 URL: `player.bilibili.com/player.html?bvid={ID}&autoplay=1&page=1&danmaku=0&muted=0`
+- iframe 播放器 URL: `www.bilibili.com/video/BV{ID}/`（完整视频页面，自动触发网页全屏）
 - 原始 B 站内容通过隐藏多个常见选择器（`.bili-video-card`、`.feed-card`、`main` 等）来隐藏，并使用 `z-index: 999999` 覆盖层覆盖其余内容
 - 自动前进回退计时器: 接收到 `postMessage` 事件后立即响应，若未收到则在 5 分钟后回退
 - 视频计数显示（"N / M"）为 1-based，多于 1 个视频时可见
+- F 键全屏目标为外层 `#bikbok-overlay`，非内部 iframe；iframe 内部 F 键被拦截并 postMessage 转发
 
 ## COMMANDS
 
@@ -122,5 +148,5 @@ Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。
 ## NOTES
 
 - B 站标题主要存储在 `<img alt="...">` 属性中，而非 `<a>` 标签的 `textContent` 中
-- `player.bilibili.com` 的 postMessage 原始来源需精确匹配（`===`，非 `startsWith`）
+- `www.bilibili.com` 的 postMessage 原始来源需精确匹配（`===`，非 `startsWith`）
 - 若未找到推荐视频，覆盖层将显示消息但仍可通过 Escape 键关闭

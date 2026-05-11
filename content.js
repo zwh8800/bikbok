@@ -338,9 +338,32 @@
   let loadingTimeoutId = null;    // Track loading timeout for cleanup
   let setupTimerId = null;        // Track polling interval for cleanup
 
+  // ── 双 iframe 槽位系统（预加载用） ───────────────────────
+  let iframes = [null, null];     // [0] / [1] 两个 iframe slot
+  let activeSlot = 0;             // 当前活跃的槽位 (0 或 1)
+  let preloadIndex = -1;          // 预加载槽位中已加载的视频索引 (-1 表示无)
+  let preloadGen = 0;             // 预加载代数计数器，防止过期操作
+  let preloadReady = false;       // 预加载视频是否已加载完成并暂停
+
+  /**
+   * 返回当前活跃（可见/播放中）的 iframe
+   * @returns {HTMLIFrameElement|null}
+   */
+  function getActiveIframe() {
+    return iframes[activeSlot];
+  }
+
+  /**
+   * 返回当前预加载（隐藏）槽位的 iframe
+   * @returns {HTMLIFrameElement|null}
+   */
+  function getPreloadIframe() {
+    return iframes[1 - activeSlot];
+  }
+
   // ── DOM 引用（进入全屏模式后初始化） ──────────────────────
   let overlay = null;    // 全屏覆盖层容器（#bikbok-overlay）
-  let iframe = null;     // B 站播放器 iframe
+  let iframe = null;     // B 站播放器 iframe（向后兼容：始终指向 activeSlot 的 iframe）
   let titleEl = null;    // 视频标题显示元素
   let counterEl = null;  // 视频计数显示元素（"N / M"）
   let hintsEl = null;    // 键盘提示文字元素
@@ -369,18 +392,23 @@
     loadingEl.className = 'bikbok-loading';
     overlay.appendChild(loadingEl);
 
-    iframe = document.createElement('iframe');
-    iframe.className = 'bikbok-player';
-    iframe.setAttribute('allow', 'autoplay; fullscreen');
-    iframe.style.position = 'absolute';
-    iframe.style.top = '0';
-    iframe.style.left = '0';
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = 'none';
-    iframe.addEventListener('load', onIframeLoad);
-    iframe.addEventListener('error', onIframeError);
-    overlay.appendChild(iframe);
+    for (var slot = 0; slot < 2; slot++) {
+      var ifr = document.createElement('iframe');
+      ifr.className = slot === activeSlot
+        ? 'bikbok-player bikbok-player-active'
+        : 'bikbok-player bikbok-player-preload';
+      ifr.setAttribute('allow', 'autoplay; fullscreen');
+      ifr.addEventListener('load', function(s) {
+        return function() { onIframeLoad(s); };
+      }(slot));
+      ifr.addEventListener('error', function(s) {
+        return function() { onIframeError(s); };
+      }(slot));
+      iframes[slot] = ifr;
+      overlay.appendChild(ifr);
+    }
+
+    iframe = getActiveIframe();
 
     titleEl = document.createElement('div');
     titleEl.className = 'bikbok-title';
@@ -439,10 +467,10 @@
     }
 
     loadingEl.classList.remove('bikbok-loading-hidden');
-    iframe.style.opacity = '0';
+    getActiveIframe().style.opacity = '0';
 
     // 通过修改 src 加载视频
-    iframe.src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
+    getActiveIframe().src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
 
     // 更新标题和计数显示
     updateUI(index);
@@ -464,16 +492,103 @@
     }, AUTO_ADVANCE_FALLBACK_MS);
 
     isTransitioning = false;
+
+    var nextIdx = index + 1;
+    if (nextIdx < videos.length && !preloadReady && preloadIndex !== nextIdx) {
+      preloadVideo(nextIdx);
+    }
+  }
+
+  /**
+   * 预加载指定索引的视频到隐藏槽位
+   * 设置 preload iframe 的 src，视频加载后会自动暂停+静音（由 handlePreloadLoaded 处理）
+   * @param {number} index — 要预加载的视频在 videos 数组中的索引
+   */
+  function preloadVideo(index) {
+    if (index >= videos.length || index === currentIndex) return;
+
+    var preIfr = getPreloadIframe();
+    if (!preIfr) return;
+
+    preloadGen++;
+    var gen = preloadGen;
+    preloadReady = false;
+    preloadIndex = index;
+
+    var video = videos[index];
+    if (!video) return;
+
+    preIfr.src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
+  }
+
+  /**
+   * 预加载 iframe 加载完成后的处理：暂停视频、静音、注入隐藏样式
+   * @param {HTMLIFrameElement} iframeEl — 预加载槽位的 iframe
+   */
+  function handlePreloadLoaded(iframeEl) {
+    var gen = preloadGen;
+
+    if (iframeEl && iframeEl.contentDocument) {
+      injectIframeHideStyles(iframeEl.contentDocument);
+    }
+
+    function tryPause() {
+      if (gen !== preloadGen) return;
+
+      if (!iframeEl || !iframeEl.contentDocument) return;
+
+      var video = iframeEl.contentDocument.querySelector('video');
+      if (video) {
+        video.muted = true;
+        video.pause();
+        preloadReady = true;
+      } else {
+        var attempts = 0;
+        var maxAttempts = Math.floor(5000 / 300);
+        var timer = setInterval(function () {
+          if (gen !== preloadGen) {
+            clearInterval(timer);
+            return;
+          }
+          attempts++;
+          if (!iframeEl || !iframeEl.contentDocument) {
+            clearInterval(timer);
+            return;
+          }
+          var v = iframeEl.contentDocument.querySelector('video');
+          if (v) {
+            v.muted = true;
+            v.pause();
+            preloadReady = true;
+            clearInterval(timer);
+          } else if (attempts >= maxAttempts) {
+            preloadReady = true;
+            clearInterval(timer);
+          }
+        }, 300);
+      }
+    }
+
+    setTimeout(function () {
+      if (gen === preloadGen) {
+        tryPause();
+      }
+    }, 500);
   }
 
   /**
    * iframe 加载成功回调
-   * 委托 setupPlayerInIframe 处理播放器初始化（全屏、隐藏无关元素、监听结束事件）。
+   * 根据槽位类型路由：活跃槽位 → 设置播放器，预加载槽位 → 暂停+静音视频。
    * 使用 generation counter 防止过时的回调污染当前视频。
+   * @param {number} slot — 槽位编号 (0 或 1)
    */
-  function onIframeLoad() {
+  function onIframeLoad(slot) {
     var gen = iframeLoadGen;
-    setupPlayerInIframe(gen);
+    if (slot === activeSlot) {
+      setupPlayerInIframe(gen);
+    } else {
+      handlePreloadLoaded(iframes[slot]);
+    }
   }
 
   /**
@@ -483,9 +598,10 @@
    */
   function finishLoad() {
     if (loadingEl) loadingEl.classList.add('bikbok-loading-hidden');
-    if (iframe) {
-      iframe.style.opacity = '1';
-      iframe.focus();
+    var activeIfr = getActiveIframe();
+    if (activeIfr) {
+      activeIfr.style.opacity = '1';
+      activeIfr.focus();
     }
   }
 
@@ -569,13 +685,14 @@
    * @param {number} gen — 当前加载代数
    */
   function setupPlayerInIframe(gen) {
-    if (!iframe || !iframe.contentDocument) {
-      injectIframeHideStyles(iframe && iframe.contentDocument);
+    var activeIfr = getActiveIframe();
+    if (!activeIfr || !activeIfr.contentDocument) {
+      injectIframeHideStyles(activeIfr && activeIfr.contentDocument);
       finishLoad();
       return;
     }
 
-    var doc = iframe.contentDocument;
+    var doc = activeIfr.contentDocument;
     // 在 iframe 内部捕获导航/全屏按键并通过 postMessage 转发到父窗口
     // 解决同一源 iframe 抢走键盘焦点导致父文档 keydown 监听失效的问题
     // Left/Right 不在列表中，直接透传给 B 站播放器处理快进/快退
@@ -598,7 +715,7 @@
       }
 
       pollCount++;
-      var currentDoc = iframe && iframe.contentDocument;
+      var currentDoc = activeIfr && activeIfr.contentDocument;
       if (!currentDoc) {
         clearInterval(setupTimerId);
         setupTimerId = null;
@@ -632,10 +749,13 @@
    * iframe 加载失败回调
    * 隐藏加载动画，保持播放器不可见，显示错误消息和重试按钮。
    */
-  function onIframeError() {
-    if (loadingEl) loadingEl.classList.add('bikbok-loading-hidden');
-    if (iframe) iframe.style.opacity = '0';
-    showMessage('Failed to load video', true);
+  function onIframeError(slot) {
+    if (slot === activeSlot) {
+      if (loadingEl) loadingEl.classList.add('bikbok-loading-hidden');
+      var activeIfr = getActiveIframe();
+      if (activeIfr) activeIfr.style.opacity = '0';
+      showMessage('Failed to load video', true);
+    }
   }
 
   /**
@@ -714,6 +834,92 @@
   }
 
   /**
+   * 交换活跃/预加载槽位：将预加载的视频变为当前播放视频
+   * 然后触发下一个视频的预加载
+   */
+  function swapAndPlayPreloaded() {
+    if (!preloadReady) return;
+
+    iframeLoadGen++;
+    var gen = iframeLoadGen;
+    if (setupTimerId !== null) {
+      clearInterval(setupTimerId);
+      setupTimerId = null;
+    }
+    if (loadingTimeoutId !== null) {
+      clearTimeout(loadingTimeoutId);
+      loadingTimeoutId = null;
+    }
+    if (autoAdvanceTimer !== null) {
+      clearTimeout(autoAdvanceTimer);
+      autoAdvanceTimer = null;
+    }
+
+    if (loadingEl) loadingEl.classList.add('bikbok-loading-hidden');
+
+    activeSlot = 1 - activeSlot;
+    iframe = getActiveIframe();
+
+    for (var i = 0; i < 2; i++) {
+      if (iframes[i]) {
+        iframes[i].className = (i === activeSlot)
+          ? 'bikbok-player bikbok-player-active'
+          : 'bikbok-player bikbok-player-preload';
+      }
+    }
+
+    getActiveIframe().style.opacity = '1';
+    getActiveIframe().focus();
+
+    currentIndex = preloadIndex;
+    preloadReady = false;
+    preloadIndex = -1;
+
+    var activeIfr = getActiveIframe();
+    if (activeIfr && activeIfr.contentDocument) {
+      var doc = activeIfr.contentDocument;
+
+      var video = doc.querySelector('video');
+      if (video) {
+        video.muted = false;
+        video.play().catch(function () {});
+      }
+
+      var wideBtn = doc.querySelector('.bpx-player-ctrl-web');
+      if (wideBtn && !wideBtn.classList.contains('bpx-state-entered')) {
+        wideBtn.click();
+      }
+
+      injectIframeHideStyles(doc);
+      attachVideoEndedListener(doc, gen);
+
+      doc.addEventListener('keydown', function (e) {
+        var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F'];
+        if (navKeys.indexOf(e.key) !== -1) {
+          window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
+    }
+
+    updateUI(currentIndex);
+    hideHints();
+
+    autoAdvanceTimer = setTimeout(function () {
+      if (currentIndex < videos.length - 1) {
+        currentIndex++;
+        loadVideo(currentIndex);
+      }
+    }, AUTO_ADVANCE_FALLBACK_MS);
+
+    var nextIdx = currentIndex + 1;
+    if (nextIdx < videos.length) {
+      preloadVideo(nextIdx);
+    }
+  }
+
+  /**
    * 切换到下一个视频
    * 
    * 三级处理逻辑：
@@ -721,7 +927,7 @@
    * 2. 已到达池末尾且重试次数已耗尽 → 显示 "End of recommendations"
    * 3. 已到达池末尾 → 触发异步 refill，显示 "Loading more..."
    * 4. 接近池末尾（剩余 ≤ REFILL_THRESHOLD）→ 后台异步 refill，正常前进
-   * 5. 正常 → 前进到下一个视频
+   * 5. 正常 → 前进到下一个视频（优先使用预加载快速交换）
    */
   function nextVideo() {
     if (currentIndex >= videos.length - 1) {
@@ -761,6 +967,11 @@
       });
     }
 
+    if (preloadReady && preloadIndex === currentIndex + 1) {
+      swapAndPlayPreloaded();
+      return;
+    }
+
     currentIndex++;
     loadVideo(currentIndex);
     hideHints();
@@ -774,6 +985,11 @@
     if (currentIndex <= 0) return;
     currentIndex--;
     loadVideo(currentIndex);
+
+    if (currentIndex + 1 < videos.length) {
+      preloadVideo(currentIndex + 1);
+    }
+
     hideHints();
   }
 
@@ -973,13 +1189,20 @@
     }
 
     if (overlay && overlay.parentNode) {
-      // Exit web fullscreen if active
-      if (iframe && iframe.contentDocument) {
-        var wideBtn = iframe.contentDocument.querySelector('.bpx-player-ctrl-web');
+      for (var i = 0; i < iframes.length; i++) {
+        if (iframes[i]) {
+          try { iframes[i].src = 'about:blank'; } catch (e) {}
+        }
+      }
+
+      var activeIfr = getActiveIframe();
+      if (activeIfr && activeIfr.contentDocument) {
+        var wideBtn = activeIfr.contentDocument.querySelector('.bpx-player-ctrl-web');
         if (wideBtn && wideBtn.classList.contains('bpx-state-entered')) {
           wideBtn.click();
         }
       }
+
       overlay.parentNode.removeChild(overlay);
       overlay = null;
     }
@@ -995,6 +1218,13 @@
     window.removeEventListener('message', onBikbokKey);
 
     if (toggleBtn) toggleBtn.style.display = '';
+
+    activeSlot = 0;
+    preloadIndex = -1;
+    preloadGen = 0;
+    preloadReady = false;
+    iframes = [null, null];
+    iframe = null;
   }
 
   /**
@@ -1015,6 +1245,11 @@
     loadingTimeoutId = null;
     setupTimerId = null;
     iframeLoadGen = 0;
+    activeSlot = 0;
+    preloadIndex = -1;
+    preloadGen = 0;
+    preloadReady = false;
+    iframes = [null, null];
 
     if (videos.length === 0) {
       // 空状态：创建覆盖层显示未找到视频的消息
@@ -1027,12 +1262,19 @@
       overlay.appendChild(msg);
       document.body.appendChild(overlay);
       document.addEventListener('keydown', onKeyDown, true);
+      iframe = null;
       return;
     }
 
     hidePage();
     createOverlay();
     loadVideo(0);
+
+    if (videos.length > 1) {
+      setTimeout(function () {
+        preloadVideo(1);
+      }, 2000);
+    }
 
     document.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keydown', onKeyDown, true);

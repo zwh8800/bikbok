@@ -20,14 +20,31 @@
   transition: background 0.4s ease;
 }
 
-/* ── 播放器 iframe ────────────────────────────────────────────
- * 占满整个覆盖层，背景黑色防止页面切换时的白屏闪烁 */
-#bikbok-overlay iframe {
+/* ── 播放器 iframe（基类）────────────────────────────────────
+ * 占满整个覆盖层，背景黑色防止页面切换时的白屏闪烁。
+ * 位置样式在此统一定义，JS 中不再内联。 */
+#bikbok-overlay .bikbok-player {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   border: none;
   outline: none;
   background: #000;
+}
+
+/* 当前正在播放的 iframe — 可见，在最上层 */
+#bikbok-overlay .bikbok-player-active {
+  z-index: 2;
+  visibility: visible;
+}
+
+/* 预加载的 iframe — 隐藏但仍渲染（contentDocument 可访问），
+ * 视频已暂停 + 静音，防止音频泄露 */
+#bikbok-overlay .bikbok-player-preload {
+  z-index: 1;
+  visibility: hidden;
 }
 
 /* ── 视频标题栏 ───────────────────────────────────────────────
