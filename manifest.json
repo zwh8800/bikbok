@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "bikbok — TikTok-style Bilibili",
+  "version": "1.0.0",
+  "description": "Transforms Bilibili homepage into a TikTok-like fullscreen video player with arrow key navigation.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://www.bilibili.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "host_permissions": [
+    "*://www.bilibili.com/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [],
+      "matches": ["*://www.bilibili.com/*"]
+    }
+  ]
+}
