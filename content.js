@@ -857,6 +857,16 @@
 
     if (loadingEl) loadingEl.classList.add('bikbok-loading-hidden');
 
+    // 暂停当前活跃 iframe 中的视频，防止切换时双视频同时播放
+    var oldActive = getActiveIframe();
+    if (oldActive && oldActive.contentDocument) {
+      var oldVideo = oldActive.contentDocument.querySelector('video');
+      if (oldVideo) {
+        oldVideo.pause();
+        oldVideo.muted = true;
+      }
+    }
+
     activeSlot = 1 - activeSlot;
     iframe = getActiveIframe();
 
