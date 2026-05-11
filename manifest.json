@@ -18,11 +18,5 @@
   ],
   "host_permissions": [
     "*://www.bilibili.com/*"
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [],
-      "matches": ["*://www.bilibili.com/*"]
-    }
   ]
 }
