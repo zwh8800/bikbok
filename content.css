@@ -150,3 +150,31 @@
 #bikbok-overlay .bikbok-retry:hover {
   background: rgba(255, 255, 255, 0.25);
 }
+
+#bikbok-toggle-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999998;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #FF0050, #FF4081);
+  color: #fff;
+  border: none;
+  border-radius: 28px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(255, 0, 80, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0.3px;
+}
+
+#bikbok-toggle-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 24px rgba(255, 0, 80, 0.55);
+}
+
+#bikbok-toggle-btn:active {
+  transform: scale(0.97);
+}

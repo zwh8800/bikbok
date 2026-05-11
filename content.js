@@ -169,7 +169,6 @@
     iframe = document.createElement('iframe');
     iframe.className = 'bikbok-player';
     iframe.setAttribute('allow', 'autoplay; fullscreen');
-    iframe.setAttribute('allowfullscreen', '');
     iframe.style.position = 'absolute';
     iframe.style.top = '0';
     iframe.style.left = '0';
@@ -448,5 +447,12 @@
     window.addEventListener('message', onMessage);
   }
 
-  init();
+  var toggleBtn = document.createElement('button');
+  toggleBtn.id = 'bikbok-toggle-btn';
+  toggleBtn.textContent = 'TikTok Mode';
+  toggleBtn.addEventListener('click', function () {
+    toggleBtn.remove();
+    init();
+  });
+  document.body.appendChild(toggleBtn);
 })();
