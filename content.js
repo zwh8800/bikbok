@@ -19,8 +19,20 @@
   const DEBOUNCE_MS = 300;               // 键盘导航防抖间隔（毫秒）
   const LOADING_TIMEOUT_MS = 15000;      // 播放器加载超时（毫秒），超过则强制隐藏加载动画
   const AUTO_ADVANCE_FALLBACK_MS = 300000; // 自动前进回退计时（毫秒），若未收到 postMessage 则 5 分钟后自动切
-  const PLAYER_ORIGIN = 'https://player.bilibili.com'; // 播放器 postMessage 来源，必须精确匹配
+  const PLAYER_ORIGIN = 'https://www.bilibili.com'; // 播放器 postMessage 来源，必须精确匹配
   const HOME_PAGE_PATHS = new Set(['/', '/index.html']); // 仅在首页生效的路径集合
+  const WEBFULLSCREEN_POLL_INTERVAL = 200;    // 轮询检测播放器是否就绪的间隔（毫秒）
+  const WEBFULLSCREEN_TIMEOUT_MS = 10000;     // 等待播放器就绪最大时长（毫秒），超时则降级
+  // iframe 内需隐藏的 B 站页面无关元素
+  const IFRAME_HIDE_SELECTORS = [
+    '.bili-header',
+    '.recommend-list',
+    '.video-toolbar',
+    '#comment',
+    '.bili-footer',
+    '.left-container .video-pod',
+    '.video-page-special',
+  ];
 
   // 仅在 B 站首页执行，其他页面直接退出
   if (!HOME_PAGE_PATHS.has(window.location.pathname)) {
@@ -322,6 +334,10 @@
   const REFILL_THRESHOLD = 3;   // 剩余 ≤3 个视频时触发 refill
   const MAX_REFRESH_ATTEMPTS = 3; // 「换一换」最多重试次数
 
+  let iframeLoadGen = 0;          // Generation counter to cancel stale async setups
+  let loadingTimeoutId = null;    // Track loading timeout for cleanup
+  let setupTimerId = null;        // Track polling interval for cleanup
+
   // ── DOM 引用（进入全屏模式后初始化） ──────────────────────
   let overlay = null;    // 全屏覆盖层容器（#bikbok-overlay）
   let iframe = null;     // B 站播放器 iframe
@@ -400,6 +416,8 @@
   function loadVideo(index) {
     if (isTransitioning) return;
     isTransitioning = true;
+    iframeLoadGen++;
+    var loadGen = iframeLoadGen;
 
     const video = videos[index];
     if (!video) {
@@ -411,20 +429,29 @@
       clearTimeout(autoAdvanceTimer);
       autoAdvanceTimer = null;
     }
+    if (loadingTimeoutId !== null) {
+      clearTimeout(loadingTimeoutId);
+      loadingTimeoutId = null;
+    }
+    if (setupTimerId !== null) {
+      clearInterval(setupTimerId);
+      setupTimerId = null;
+    }
 
     loadingEl.classList.remove('bikbok-loading-hidden');
     iframe.style.opacity = '0';
 
     // 通过修改 src 加载视频
-    iframe.src = `https://player.bilibili.com/player.html?bvid=${encodeURIComponent(video.bvid)}&autoplay=1&page=1&danmaku=0&muted=0`;
+    iframe.src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
 
     // 更新标题和计数显示
     updateUI(index);
 
     // 加载超时保护：超过 LOADING_TIMEOUT_MS 仍无响应则强制隐藏加载动画
-    setTimeout(function () {
-      if (loadingEl && !loadingEl.classList.contains('bikbok-loading-hidden')) {
-        onIframeLoad();
+    loadingTimeoutId = setTimeout(function () {
+      loadingTimeoutId = null;
+      if (loadGen === iframeLoadGen && loadingEl && !loadingEl.classList.contains('bikbok-loading-hidden')) {
+        finishLoad();
       }
     }, LOADING_TIMEOUT_MS);
 
@@ -441,11 +468,158 @@
 
   /**
    * iframe 加载成功回调
-   * 隐藏加载动画，显示播放器内容。
+   * 委托 setupPlayerInIframe 处理播放器初始化（全屏、隐藏无关元素、监听结束事件）。
+   * 使用 generation counter 防止过时的回调污染当前视频。
    */
   function onIframeLoad() {
+    var gen = iframeLoadGen;
+    setupPlayerInIframe(gen);
+  }
+
+  /**
+   * 完成加载：隐藏 loading 动画并显示 iframe
+   */
+  function finishLoad() {
     if (loadingEl) loadingEl.classList.add('bikbok-loading-hidden');
     if (iframe) iframe.style.opacity = '1';
+  }
+
+  /**
+   * 向 iframe 内部的 document 注入样式，隐藏 B 站页面无关元素（头部、评论区、推荐列表等）
+   * 同时设置背景色为黑色、禁止溢出滚动。
+   * @param {Document} doc — iframe.contentDocument
+   */
+  function injectIframeHideStyles(doc) {
+    if (!doc || !doc.body) return;
+    doc.body.style.background = '#000';
+    doc.documentElement.style.overflow = 'hidden';
+    for (var i = 0; i < IFRAME_HIDE_SELECTORS.length; i++) {
+      var els = doc.querySelectorAll(IFRAME_HIDE_SELECTORS[i]);
+      for (var j = 0; j < els.length; j++) {
+        els[j].style.setProperty('display', 'none', 'important');
+      }
+    }
+  }
+
+  /**
+   * 视频播放结束处理器（供 video.ended 事件使用）
+   * 清除自动前进计时器并切换到下一个视频。
+   */
+  function onVideoEndedInIframe() {
+    if (autoAdvanceTimer !== null) {
+      clearTimeout(autoAdvanceTimer);
+      autoAdvanceTimer = null;
+    }
+    if (currentIndex < videos.length - 1) {
+      nextVideo();
+    }
+  }
+
+  /**
+   * 向 iframe 内部 <video> 元素绑定 ended 事件监听
+   * 若 video 元素未立即就绪，则轮询等待最多 5 秒。
+   * 使用 gen 参数防止过时的监听器响应。
+   * @param {Document} doc — iframe.contentDocument
+   * @param {number} gen — 当前加载代数
+   */
+  function attachVideoEndedListener(doc, gen) {
+    if (!doc) return;
+    var video = doc.querySelector('video');
+    if (video) {
+      video.addEventListener('ended', function videoEndHandler() {
+        if (gen === iframeLoadGen) {
+          onVideoEndedInIframe();
+        }
+      }, { once: false });
+      return;
+    }
+    // 轮询等待 video 元素出现
+    var attempts = 0;
+    var maxAttempts = Math.floor(5000 / 500);
+    var pollTimer = setInterval(function () {
+      if (gen !== iframeLoadGen) {
+        clearInterval(pollTimer);
+        return;
+      }
+      attempts++;
+      var v = doc.querySelector('video');
+      if (v) {
+        v.addEventListener('ended', function videoEndHandler() {
+          if (gen === iframeLoadGen) {
+            onVideoEndedInIframe();
+          }
+        }, { once: false });
+        clearInterval(pollTimer);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(pollTimer);
+      }
+    }, 500);
+  }
+
+  /**
+   * 在 iframe 内部设置播放器：触发网页全屏、隐藏无关元素、绑定视频结束事件
+   * 轮询检测 .bpx-player-ctrl-web 按钮是否就绪，就绪后点击触发网页全屏。
+   * 超时后降级：仍注入样式并绑定结束监听，但不触发全屏。
+   * 使用 gen 参数防止过时回调污染当前视频。
+   * @param {number} gen — 当前加载代数
+   */
+  function setupPlayerInIframe(gen) {
+    if (!iframe || !iframe.contentDocument) {
+      injectIframeHideStyles(iframe && iframe.contentDocument);
+      finishLoad();
+      return;
+    }
+
+    var doc = iframe.contentDocument;
+    // 在 iframe 内部捕获键盘事件并通过 postMessage 转发到父窗口
+    // 解决同一源 iframe 抢走键盘焦点导致父文档 keydown 监听失效的问题
+    doc.addEventListener('keydown', function (e) {
+      var navKeys = ['Escape', 'ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'];
+      if (navKeys.indexOf(e.key) !== -1) {
+        window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
+    var pollCount = 0;
+    var maxPolls = Math.floor(WEBFULLSCREEN_TIMEOUT_MS / WEBFULLSCREEN_POLL_INTERVAL);
+
+    setupTimerId = setInterval(function () {
+      if (gen !== iframeLoadGen) {
+        clearInterval(setupTimerId);
+        setupTimerId = null;
+        return;
+      }
+
+      pollCount++;
+      var currentDoc = iframe && iframe.contentDocument;
+      if (!currentDoc) {
+        clearInterval(setupTimerId);
+        setupTimerId = null;
+        return;
+      }
+
+      var wideBtn = currentDoc.querySelector('.bpx-player-ctrl-web');
+
+      if (wideBtn) {
+        clearInterval(setupTimerId);
+        setupTimerId = null;
+
+        if (!wideBtn.classList.contains('bpx-state-entered')) {
+          wideBtn.click();
+        }
+
+        injectIframeHideStyles(currentDoc);
+        attachVideoEndedListener(currentDoc, gen);
+        finishLoad();
+      } else if (pollCount >= maxPolls) {
+        clearInterval(setupTimerId);
+        setupTimerId = null;
+        injectIframeHideStyles(currentDoc);
+        attachVideoEndedListener(currentDoc, gen);
+        finishLoad();
+      }
+    }, WEBFULLSCREEN_POLL_INTERVAL);
   }
 
   /**
@@ -718,6 +892,22 @@
   }
 
   /**
+   * 处理来自 iframe 内部转发的键盘事件
+   * iframe 内部捕获键事件后通过 postMessage 转发到父窗口，
+   * 解决同一源 iframe 抢走键盘焦点导致父文档无法捕获 keydown 的问题。
+   * @param {MessageEvent} e
+   */
+  function onBikbokKey(e) {
+    if (e.data && e.data.type === 'bikbok-key') {
+      onKeyDown({
+        key: e.data.key,
+        preventDefault: function () {},
+        stopPropagation: function () {}
+      });
+    }
+  }
+
+  /**
    * 清理资源，退出全屏模式
    * 
    * 按顺序执行：
@@ -729,12 +919,29 @@
    * 6. 恢复模式切换按钮的显示
    */
   function cleanup() {
+    if (setupTimerId !== null) {
+      clearInterval(setupTimerId);
+      setupTimerId = null;
+    }
+    if (loadingTimeoutId !== null) {
+      clearTimeout(loadingTimeoutId);
+      loadingTimeoutId = null;
+    }
+    iframeLoadGen++; // Abort any pending setups
+
     if (autoAdvanceTimer !== null) {
       clearTimeout(autoAdvanceTimer);
       autoAdvanceTimer = null;
     }
 
     if (overlay && overlay.parentNode) {
+      // Exit web fullscreen if active
+      if (iframe && iframe.contentDocument) {
+        var wideBtn = iframe.contentDocument.querySelector('.bpx-player-ctrl-web');
+        if (wideBtn && wideBtn.classList.contains('bpx-state-entered')) {
+          wideBtn.click();
+        }
+      }
       overlay.parentNode.removeChild(overlay);
       overlay = null;
     }
@@ -745,7 +952,9 @@
     document.body.style.overflow = '';
 
     document.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('message', onMessage);
+    window.removeEventListener('message', onBikbokKey);
 
     if (toggleBtn) toggleBtn.style.display = '';
   }
@@ -765,6 +974,9 @@
     videos.forEach(function (v) { seenBvids.add(v.bvid); });
     refillPromise = null;
     refreshAttempts = 0;
+    loadingTimeoutId = null;
+    setupTimerId = null;
+    iframeLoadGen = 0;
 
     if (videos.length === 0) {
       // 空状态：创建覆盖层显示未找到视频的消息
@@ -785,7 +997,9 @@
     loadVideo(0);
 
     document.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('message', onMessage);
+    window.addEventListener('message', onBikbokKey);
   }
 
   // ── 模式切换按钮 ───────────────────────────────────────────

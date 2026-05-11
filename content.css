@@ -21,22 +21,13 @@
 }
 
 /* ── 播放器 iframe ────────────────────────────────────────────
- * 占满整个覆盖层，object-fit: cover 保证视频内容裁剪适配 */
+ * 占满整个覆盖层，背景黑色防止页面切换时的白屏闪烁 */
 #bikbok-overlay iframe {
   width: 100%;
   height: 100%;
   border: none;
   outline: none;
-  object-fit: cover;
-}
-
-/* ── 宽屏适配（16:9 及以上） ──────────────────────────────────
- * 限制 iframe 最大宽度为 16:9 比例，避免超宽屏幕上视频过度拉伸 */
-@media (min-aspect-ratio: 16/9) {
-  #bikbok-overlay iframe {
-    width: auto;
-    max-width: calc(100vh * 16 / 9);
-  }
+  background: #000;
 }
 
 /* ── 视频标题栏 ───────────────────────────────────────────────
