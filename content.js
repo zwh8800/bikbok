@@ -10,6 +10,7 @@
  * 2. 用户点击右下角「TikTok Mode」按钮进入全屏模式
  * 3. Arrow Up/Down/Left/Right 切换视频，Escape 退出
  * 4. 监听播放器 postMessage 实现视频播完自动前进
+ * 5. 视频池耗尽时自动从 DOM 重新提取，若仍无新视频则点击「换一换」按钮刷新推荐
  */
 (function () {
   'use strict';
@@ -60,6 +61,113 @@
     }
 
     return videos;
+  }
+
+  /**
+   * 从 DOM 中重新提取视频并追加到播放池
+   * 
+   * 调用 extractVideoCards() 获取当前 DOM 中所有视频，
+   * 通过 seenBvids 集合过滤掉已加入 pool 的视频，
+   * 将新视频追加到 videos 数组并记录其 BV 编号。
+   * 
+   * @returns {number} 本次新添加的视频数量
+   */
+  function refillVideos() {
+    var fresh = extractVideoCards();
+    var added = 0;
+    for (var i = 0; i < fresh.length; i++) {
+      if (!seenBvids.has(fresh[i].bvid)) {
+        seenBvids.add(fresh[i].bvid);
+        videos.push(fresh[i]);
+        added++;
+      }
+    }
+    return added;
+  }
+
+  /**
+   * 点击页面「换一换」按钮并等待 DOM 更新后提取新视频
+   * 
+   * 查找 B 站首页推荐区的「换一换」按钮（selector: button.roll-btn），
+   * 点击后每 500ms 轮询 refillVideos()，一旦有新视频加入则立即返回。
+   * 最多等待 15 秒，超时返回 0。
+   * 按钮在 display:none 状态下点击依然有效（DOM 事件不受 CSS 影响）。
+   * 
+   * @returns {Promise<number>} 解析为本次新添加的视频数量
+   */
+  function clickRefreshButton() {
+    return new Promise(function (resolve) {
+      var btn = document.querySelector('button.roll-btn');
+      if (!btn) {
+        resolve(0);
+        return;
+      }
+      btn.click();
+      var start = Date.now();
+      var timer = setInterval(function () {
+        var count = refillVideos();
+        if (count > 0) {
+          clearInterval(timer);
+          resolve(count);
+          return;
+        }
+        if (Date.now() - start >= 15000) {
+          clearInterval(timer);
+          resolve(0);
+        }
+      }, 500);
+    });
+  }
+
+  /**
+   * 确保视频池中有足够的视频可供播放
+   * 
+   * 编排 refill → refresh 重试循环：
+   * 1. 首先尝试从当前 DOM 提取新视频（refillVideos）
+   * 2. 若无新视频则点击「换一换」按钮刷新推荐（clickRefreshButton）
+   * 3. 最多重试 MAX_REFRESH_ATTEMPTS 次
+   * 4. 并发调用去重：若已有 refill 正在进行中，返回同一个 Promise
+   * 
+   * @returns {Promise<number>} 解析为本次总共新添加的视频数量
+   */
+  function ensureVideosAvailable() {
+    if (refillPromise !== null) {
+      return refillPromise;
+    }
+
+    refillPromise = (function () {
+      var totalAdded = 0;
+      var attempts = 0;
+
+      function tryRefill() {
+        if (attempts >= MAX_REFRESH_ATTEMPTS) {
+          return Promise.resolve(totalAdded);
+        }
+        attempts++;
+        refreshAttempts++;
+
+        var fromDOM = refillVideos();
+        if (fromDOM > 0) {
+          totalAdded += fromDOM;
+          return Promise.resolve(totalAdded);
+        }
+
+        return clickRefreshButton().then(function (fromRefresh) {
+          totalAdded += fromRefresh;
+          if (fromRefresh > 0) {
+            return totalAdded;
+          }
+          return tryRefill();
+        });
+      }
+
+      return tryRefill().then(function (result) {
+        refillPromise = null;
+        return result;
+      });
+    })();
+
+    return refillPromise;
   }
 
   /**
@@ -200,13 +308,19 @@
   }
 
   // ── 全局状态 ──────────────────────────────────────────────
-  const videos = extractVideoCards(); // 从 DOM 提取的视频列表（数组，元素为 {bvid, title}）
+  let videos = extractVideoCards(); // 从 DOM 提取的视频列表（动态 pool，元素为 {bvid, title}）
+  const seenBvids = new Set();     // 已加入 pool 的 BV 编号集合，跨提取去重
 
   let currentIndex = 0;     // 当前播放视频的索引（0-based）
   let lastNavTime = 0;      // 上次导航时间戳，用于键盘防抖
   let hintsHidden = false;  // 键盘提示是否已被隐藏
   let isTransitioning = false; // 是否正在切换视频（防止并发加载）
   let autoAdvanceTimer = null;  // 自动前进回退计时器 ID
+
+  let refillPromise = null;     // 正在进行的异步 refill Promise（并发去重）
+  let refreshAttempts = 0;      // 「换一换」按钮已点击次数（重试上限内）
+  const REFILL_THRESHOLD = 3;   // 剩余 ≤3 个视频时触发 refill
+  const MAX_REFRESH_ATTEMPTS = 3; // 「换一换」最多重试次数
 
   // ── DOM 引用（进入全屏模式后初始化） ──────────────────────
   let overlay = null;    // 全屏覆盖层容器（#bikbok-overlay）
@@ -405,13 +519,52 @@
 
   /**
    * 切换到下一个视频
-   * 若已是最后一个视频，显示结束提示。
+   * 
+   * 三级处理逻辑：
+   * 1. 已到达池末尾且 refill 进行中 → 显示 "Loading more..."
+   * 2. 已到达池末尾且重试次数已耗尽 → 显示 "End of recommendations"
+   * 3. 已到达池末尾 → 触发异步 refill，显示 "Loading more..."
+   * 4. 接近池末尾（剩余 ≤ REFILL_THRESHOLD）→ 后台异步 refill，正常前进
+   * 5. 正常 → 前进到下一个视频
    */
   function nextVideo() {
     if (currentIndex >= videos.length - 1) {
-      showEndMessage();
+      if (refillPromise !== null) {
+        showEndMessage('Loading more...');
+        return;
+      }
+      if (refreshAttempts >= MAX_REFRESH_ATTEMPTS) {
+        showEndMessage();
+        return;
+      }
+      showEndMessage('Loading more...');
+      refillPromise = ensureVideosAvailable();
+      refillPromise.then(function (added) {
+        refillPromise = null;
+        removeEndMessage();
+        updateUI(currentIndex);
+        if (currentIndex < videos.length - 1) {
+          currentIndex++;
+          loadVideo(currentIndex);
+        } else {
+          showEndMessage();
+        }
+      });
       return;
     }
+
+    var remaining = videos.length - currentIndex - 1;
+    if (remaining <= REFILL_THRESHOLD
+        && refillPromise === null
+        && refreshAttempts < MAX_REFRESH_ATTEMPTS) {
+      refillPromise = ensureVideosAvailable();
+      refillPromise.then(function (added) {
+        refillPromise = null;
+        updateUI(currentIndex);
+        removeEndMessage();
+      });
+    }
+
     currentIndex++;
     loadVideo(currentIndex);
     hideHints();
@@ -429,13 +582,27 @@
   }
 
   /**
-   * 显示"推荐视频已看完"的结束提示
+   * 显示推荐列表结束提示
+   * 
+   * @param {string} [text] — 自定义提示文本，默认为 "End of recommendations ✨"
    */
-  function showEndMessage() {
+  function showEndMessage(text) {
+    if (!overlay) return;
+    var existing = overlay.querySelector('.bikbok-end');
+    if (existing) existing.remove();
     var msg = document.createElement('div');
     msg.className = 'bikbok-end';
-    msg.textContent = 'End of recommendations \u2728';
-    if (overlay) overlay.appendChild(msg);
+    msg.textContent = typeof text === 'string' ? text : 'End of recommendations \u2728';
+    overlay.appendChild(msg);
+  }
+
+  /**
+   * 移除结束提示（refill 完成后调用）
+   */
+  function removeEndMessage() {
+    if (!overlay) return;
+    var el = overlay.querySelector('.bikbok-end');
+    if (el) el.remove();
   }
 
   /**
@@ -593,6 +760,12 @@
    *    绑定键盘导航和 postMessage 监听
    */
   function init() {
+    // 初始化/重置 refill 相关状态
+    seenBvids.clear();
+    videos.forEach(function (v) { seenBvids.add(v.bvid); });
+    refillPromise = null;
+    refreshAttempts = 0;
+
     if (videos.length === 0) {
       // 空状态：创建覆盖层显示未找到视频的消息
       overlay = document.createElement('div');
