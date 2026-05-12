@@ -337,6 +337,7 @@
   let iframeLoadGen = 0;          // Generation counter to cancel stale async setups
   let loadingTimeoutId = null;    // Track loading timeout for cleanup
   let setupTimerId = null;        // Track polling interval for cleanup
+  let earlyMuteTimerId = null;    // 早期静音轮询计时器 ID，防止预加载视频音频泄露
 
   // ── 双 iframe 槽位系统（预加载用） ───────────────────────
   let iframes = [null, null];     // [0] / [1] 两个 iframe slot
@@ -510,8 +511,24 @@
   }
 
   /**
+   * 立即静音并暂停 iframe 中的所有视频和音频元素
+   * 用于在预加载新视频时防止音频泄露，以及在早期静音轮询中持续检测新出现的媒体元素
+   * @param {HTMLIFrameElement} iframeEl — 目标 iframe 元素
+   */
+  function immediatelyMuteIframe(iframeEl) {
+    if (!iframeEl || !iframeEl.contentDocument) return;
+    var doc = iframeEl.contentDocument;
+    var els = doc.querySelectorAll('video, audio');
+    for (var i = 0; i < els.length; i++) {
+      els[i].muted = true;
+      els[i].pause();
+    }
+  }
+
+  /**
    * 预加载指定索引的视频到隐藏槽位
    * 设置 preload iframe 的 src，视频加载后会自动暂停+静音（由 handlePreloadLoaded 处理）
+   * 同时启动早期静音轮询，在新页面加载过程中持续检测并静音媒体元素，防止音频泄露
    * @param {number} index — 要预加载的视频在 videos 数组中的索引
    */
   function preloadVideo(index) {
@@ -519,6 +536,11 @@
 
     var preIfr = getPreloadIframe();
     if (!preIfr) return;
+
+    if (earlyMuteTimerId !== null) {
+      clearInterval(earlyMuteTimerId);
+      earlyMuteTimerId = null;
+    }
 
     preloadGen++;
     var gen = preloadGen;
@@ -528,7 +550,25 @@
     var video = videos[index];
     if (!video) return;
 
+    immediatelyMuteIframe(preIfr);
+
     preIfr.src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
+
+    var maxPolls = Math.floor(15000 / 50);
+    var pollCount = 0;
+    earlyMuteTimerId = setInterval(function () {
+      if (gen !== preloadGen || preloadReady) {
+        clearInterval(earlyMuteTimerId);
+        earlyMuteTimerId = null;
+        return;
+      }
+      pollCount++;
+      immediatelyMuteIframe(preIfr);
+      if (pollCount >= maxPolls) {
+        clearInterval(earlyMuteTimerId);
+        earlyMuteTimerId = null;
+      }
+    }, 50);
   }
 
   /**
@@ -537,6 +577,11 @@
    */
   function handlePreloadLoaded(iframeEl) {
     var gen = preloadGen;
+
+    if (earlyMuteTimerId !== null) {
+      clearInterval(earlyMuteTimerId);
+      earlyMuteTimerId = null;
+    }
 
     if (iframeEl && iframeEl.contentDocument) {
       injectIframeHideStyles(iframeEl.contentDocument);
@@ -554,7 +599,7 @@
         preloadReady = true;
       } else {
         var attempts = 0;
-        var maxAttempts = Math.floor(5000 / 300);
+        var maxAttempts = Math.floor(5000 / 50);
         var timer = setInterval(function () {
           if (gen !== preloadGen) {
             clearInterval(timer);
@@ -575,15 +620,11 @@
             preloadReady = true;
             clearInterval(timer);
           }
-        }, 300);
+        }, 50);
       }
     }
 
-    setTimeout(function () {
-      if (gen === preloadGen) {
-        tryPause();
-      }
-    }, 500);
+    tryPause();
   }
 
   /**
@@ -1196,6 +1237,10 @@
       clearTimeout(loadingTimeoutId);
       loadingTimeoutId = null;
     }
+    if (earlyMuteTimerId !== null) {
+      clearInterval(earlyMuteTimerId);
+      earlyMuteTimerId = null;
+    }
     iframeLoadGen++; // Abort any pending setups
 
     if (autoAdvanceTimer !== null) {
@@ -1265,6 +1310,7 @@
     loadingTimeoutId = null;
     setupTimerId = null;
     iframeLoadGen = 0;
+    earlyMuteTimerId = null;
     activeSlot = 0;
     preloadIndex = -1;
     preloadGen = 0;
