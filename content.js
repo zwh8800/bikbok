@@ -178,6 +178,9 @@
     window.addEventListener('message', $.onMessage);
     window.addEventListener('message', $.onBikbokKey);
 
+    // 操作指南 8s 后自动消失
+    setTimeout(function () { $.hideHints(); }, 8000);
+
     // 自动进入浏览器全屏
     if ($.overlay.requestFullscreen) $.overlay.requestFullscreen().catch(function () {});
   }
