@@ -98,6 +98,7 @@ state.js → extract.js → player.js → ui.js → input.js → content.js
 - **向用户提问时使用 `question` 工具** — 当需要用户做出选择或确认时，使用 `question` 工具而非纯文本提问
 - **禁止打破模块加载顺序** — manifest `js` 数组顺序不可变更，新增文件必须插入正确位置
 - **禁止模块间循环依赖** — 通过 `state.navigation` 注册表打破 content.js ↔ input.js 循环
+- **禁止主动提交代码** — 除非用户明确要求提交，否则不执行 `git commit`
 
 ## UNIQUE STYLES
 
