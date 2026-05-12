@@ -62,6 +62,8 @@
 
   api.onMessage = function (e) {
     if (e.origin !== api.PLAYER_ORIGIN) return;
+    var activeIfr = api.getActiveIframe();
+    if (!activeIfr || e.source !== activeIfr.contentWindow) return;
     const data = e.data;
     if (!data || typeof data !== 'object') return;
     const isEnded = data.type === 'video_ended' || data.type === 'ended' || data.event === 'video_ended' || data.event === 'ended' || data.info === 'ended';
