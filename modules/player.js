@@ -71,11 +71,15 @@
     var gen = api.preloadGen;
     if (api.earlyMuteTimerId !== null) { clearInterval(api.earlyMuteTimerId); api.earlyMuteTimerId = null; }
     if (iframeEl && iframeEl.contentDocument) api.injectIframeHideStyles(iframeEl.contentDocument);
+    function addPlayBlocker(video, ifr) {
+      ifr._blockPlay = true;
+      video.addEventListener('play', function () { if (ifr._blockPlay) { video.pause(); video.muted = true; } });
+    }
     function tryPause() {
       if (gen !== api.preloadGen) return;
       if (!iframeEl || !iframeEl.contentDocument) return;
       var video = iframeEl.contentDocument.querySelector('video');
-      if (video) { video.muted = true; video.pause(); video.currentTime = 0; api.preloadReady = true; }
+      if (video) { video.muted = true; video.pause(); video.currentTime = 0; addPlayBlocker(video, iframeEl); api.preloadReady = true; }
       else {
         var attempts = 0;
         var maxAttempts = Math.floor(5000 / 50);
@@ -84,7 +88,7 @@
           attempts++;
           if (!iframeEl || !iframeEl.contentDocument) { clearInterval(timer); return; }
           var v = iframeEl.contentDocument.querySelector('video');
-          if (v) { v.muted = true; v.pause(); v.currentTime = 0; api.preloadReady = true; clearInterval(timer); }
+          if (v) { v.muted = true; v.pause(); v.currentTime = 0; addPlayBlocker(v, iframeEl); api.preloadReady = true; clearInterval(timer); }
           else if (attempts >= maxAttempts) { api.preloadReady = true; clearInterval(timer); }
         }, 50);
       }
@@ -220,7 +224,7 @@
     if (activeIfr && activeIfr.contentDocument) {
       var doc = activeIfr.contentDocument;
       var video = doc.querySelector('video');
-      if (video) { video.currentTime = 0; video.muted = false; video.play().catch(function () {}); }
+      if (video) { activeIfr._blockPlay = false; video.currentTime = 0; video.muted = false; video.play().catch(function () {}); }
       var wideBtn = doc.querySelector('.bpx-player-ctrl-web');
       if (wideBtn && !wideBtn.classList.contains('bpx-state-entered')) wideBtn.click();
       api.injectIframeHideStyles(doc);
