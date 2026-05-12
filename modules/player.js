@@ -254,11 +254,6 @@
       var video = activeIfr.contentDocument.querySelector('video');
       if (video) video.playbackRate = rate;
     }
-    var preIfr = api.getPreloadIframe();
-    if (preIfr && preIfr.contentDocument) {
-      var preVideo = preIfr.contentDocument.querySelector('video');
-      if (preVideo) preVideo.playbackRate = rate;
-    }
   };
 
   api.adjustSpeed = function (delta) {
