@@ -102,6 +102,7 @@
     if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
     var activeIfr = api.getActiveIframe();
     if (activeIfr) { activeIfr.style.opacity = '1'; activeIfr.focus(); }
+    api.showTitleBriefly();
   };
 
   api.injectIframeHideStyles = function (doc) {
@@ -233,6 +234,7 @@
       }, true);
     }
     api.updateUI(api.currentIndex);
+    api.showTitleBriefly();
     api.hideHints();
     api.autoAdvanceTimer = setTimeout(function () {
       if (api.currentIndex < api.videos.length - 1) { api.currentIndex++; api.loadVideo(api.currentIndex); }

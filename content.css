@@ -48,7 +48,8 @@
 }
 
 /* ── 视频标题栏 ───────────────────────────────────────────────
- * 底部渐变遮罩，文字靠左底部，单行超出省略 */
+ * 底部渐变遮罩，文字靠左底部，单行超出省略。
+ * 切换视频后显示 3s，然后 opacity 过渡淡出 */
 #bikbok-overlay .bikbok-title {
   position: absolute;
   bottom: 0;
@@ -65,7 +66,12 @@
   overflow: hidden;
   pointer-events: none;
   z-index: 2;
+  transition: opacity 0.6s ease;
   -webkit-font-smoothing: antialiased;
+}
+
+#bikbok-overlay .bikbok-title-hidden {
+  opacity: 0;
 }
 
 /* ── 视频计数器（右上角 "N / M"） ────────────────────────────

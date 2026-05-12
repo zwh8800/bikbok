@@ -39,6 +39,7 @@
   api.setupTimerId = null;
   api.earlyMuteTimerId = null;
   api.speedIndicatorTimer = null;
+  api.titleTimerId = null;
 
   // ── 倍速控制 ──────────────────────────────────────────────
   api.SPEED_STEP = 0.25;

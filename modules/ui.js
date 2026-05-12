@@ -99,4 +99,13 @@
     api.speedIndicatorTimer = setTimeout(function () { if (el.parentNode) el.remove(); }, 1500);
   };
 
+  api.showTitleBriefly = function () {
+    if (!api.titleEl) return;
+    clearTimeout(api.titleTimerId);
+    api.titleEl.classList.remove('bikbok-title-hidden');
+    api.titleTimerId = setTimeout(function () {
+      if (api.titleEl) api.titleEl.classList.add('bikbok-title-hidden');
+    }, 3000);
+  };
+
 })(window.__bikbok);
