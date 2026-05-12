@@ -152,7 +152,7 @@
     }
     var doc = activeIfr.contentDocument;
     doc.addEventListener('keydown', function (e) {
-      var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F'];
+      var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O'];
       if (navKeys.indexOf(e.key) !== -1) {
         window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
         e.preventDefault(); e.stopPropagation();
@@ -225,7 +225,7 @@
       api.injectIframeHideStyles(doc);
       api.attachVideoEndedListener(doc, gen);
       doc.addEventListener('keydown', function (e) {
-        var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F'];
+        var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O'];
         if (navKeys.indexOf(e.key) !== -1) {
           window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
           e.preventDefault(); e.stopPropagation();
@@ -239,6 +239,36 @@
     }, api.AUTO_ADVANCE_FALLBACK_MS);
     var nextIdx = api.currentIndex + 1;
     if (nextIdx < api.videos.length) api.preloadVideo(nextIdx);
+  };
+
+  api.getCurrentSpeed = function () {
+    var activeIfr = api.getActiveIframe();
+    if (!activeIfr || !activeIfr.contentDocument) return 1.0;
+    var video = activeIfr.contentDocument.querySelector('video');
+    return video ? video.playbackRate : 1.0;
+  };
+
+  api.setPlaybackSpeed = function (rate) {
+    var activeIfr = api.getActiveIframe();
+    if (activeIfr && activeIfr.contentDocument) {
+      var video = activeIfr.contentDocument.querySelector('video');
+      if (video) video.playbackRate = rate;
+    }
+    var preIfr = api.getPreloadIframe();
+    if (preIfr && preIfr.contentDocument) {
+      var preVideo = preIfr.contentDocument.querySelector('video');
+      if (preVideo) preVideo.playbackRate = rate;
+    }
+  };
+
+  api.adjustSpeed = function (delta) {
+    var current = api.getCurrentSpeed();
+    var newRate = current + delta;
+    if (newRate < api.SPEED_MIN) newRate = api.SPEED_MIN;
+    if (newRate > api.SPEED_MAX) newRate = api.SPEED_MAX;
+    newRate = Math.round(newRate * 100) / 100;
+    api.setPlaybackSpeed(newRate);
+    return newRate;
   };
 
 })(window.__bikbok);

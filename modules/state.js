@@ -38,6 +38,12 @@
   api.loadingTimeoutId = null;
   api.setupTimerId = null;
   api.earlyMuteTimerId = null;
+  api.speedIndicatorTimer = null;
+
+  // ── 倍速控制 ──────────────────────────────────────────────
+  api.SPEED_STEP = 0.25;
+  api.SPEED_MIN = 0.25;
+  api.SPEED_MAX = 3.0;
 
   // ── 双 iframe 槽位系统 ────────────────────────────────────
   api.iframes = [null, null];

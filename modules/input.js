@@ -27,6 +27,22 @@
       api.toggleFullscreen();
       return;
     }
+    if (e.key === 'i' || e.key === 'I') {
+      if (!api.overlay) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var slower = api.adjustSpeed(-api.SPEED_STEP);
+      api.showSpeedIndicator(slower);
+      return;
+    }
+    if (e.key === 'o' || e.key === 'O') {
+      if (!api.overlay) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var faster = api.adjustSpeed(api.SPEED_STEP);
+      api.showSpeedIndicator(faster);
+      return;
+    }
     if (e.key === ' ') return;
     const now = Date.now();
     if (now - api.lastNavTime < api.DEBOUNCE_MS) return;

@@ -1,89 +1,115 @@
 # bikbok — B站 TikTok 模式 Chrome 插件
 
 **Generated:** 2026-05-12
-**Commit:** 879d83c
+**Commit:** a92bdf1
 **Branch:** master
 
 ## OVERVIEW
 
-Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。纯 vanilla JS，iframe 嵌入 B 站播放器。
+Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。纯 vanilla JS，iframe 嵌入 B 站播放器。无构建步骤，无后台脚本，无弹出窗。
 
 ## STRUCTURE
 
 ```
 /
-├── manifest.json    # MV3 清单 — content_script 在 www.bilibili.com，无后台/popup/options
-├── content.js       # 主逻辑 (1054 行) — 视频提取 / 全屏覆盖层 / 键盘导航 / 全屏切换
-├── content.css      # 深色全屏覆盖层 + 切换按钮样式 (207 行)
-├── opencode.json    # OpenCode 编辑器 + chrome-devtools MCP 配置
-├── icons/           # 扩展图标 (16/48/128px)
-├── docs/            # 设计文档 + 测试用例
-└── .sisyphus/       # AI 工作流工具目录 (与扩展运行时无关)
+├── manifest.json      # MV3 清单 — content_script 在 www.bilibili.com，6 个 JS 按序加载
+├── content.js         # 入口 (198 行) — init/cleanup/nav/按钮
+├── content.css        # 深色全屏覆盖层 + 切换按钮样式 (242 行)
+├── modules/           # 5 个模块，通过 window.__bikbok 命名空间共享状态
+│   ├── state.js       #   共享常量 + 状态 + 槽位辅助 (80 行)
+│   ├── extract.js     #   视频提取管道 (103 行)
+│   ├── player.js      #   播放器管理 — 加载/预加载/交换/倍速 (274 行)
+│   ├── ui.js          #   覆盖层创建 + UI 更新 (102 行)
+│   └── input.js       #   键盘/消息/全屏事件处理 (74 行)
+├── icons/             # 扩展图标 (16/48/128px)
+├── docs/              # 设计文档 + 测试用例
+└── .sisyphus/         # AI 工作流工具目录 (与扩展运行时无关)
 ```
+
+### 模块加载顺序（关键——不可变更）
+
+manifest.json 的 `js` 数组按依赖序排列：
+```
+state.js → extract.js → player.js → ui.js → input.js → content.js
+```
+每个文件都是 IIFE，通过 `window.__bikbok`（别名 `api` 或 `$`）读写共享状态。
 
 ## WHERE TO LOOK
 
 | 需求 | 位置 | 说明 |
 |------|------|------|
-| 视频提取逻辑 | `content.js` → `extractVideoCards()` | 从 DOM `a[href*="/video/BV"]` 提取 BV ID |
-| 标题推断 | `content.js` → `inferTitle()` | 回退链: img[alt] → title 属性 → textContent → 卡片标题 → 父元素文本 → BV ID |
+| 视频提取逻辑 | `modules/extract.js` → `extractVideoCards()` | 从 DOM `a[href*="/video/BV"]` 提取 BV ID |
+| 标题推断 | `modules/extract.js` → `inferTitle()` | 5 级回退链: img[alt] → title → textContent → 卡片标题 → 父文本 → BV ID |
+| 视频池 Refill | `modules/extract.js` → `ensureVideosAvailable()` | DOM 提取 + 换一换按钮，最多 3 次重试 |
 | 页面隐藏 / 恢复 | `content.js` → `hidePage()` / `showPage()` | 保存原始 `display` 值，恢复时正确还原 |
-| 全屏覆盖层 | `content.js` → `createOverlay()` | iframe 嵌入 `www.bilibili.com/video/BV{ID}/` |
-| 键盘导航 | `content.js` → `onKeyDown()` | ↑↓ = 上一个/下一个，Escape = 退出，300ms 防抖 |
-| 浏览器全屏切换 | `content.js` → `toggleFullscreen()` | F 键切换 overlay 外层浏览器全屏 |
-| 视频快进/快退 | `content.js` → `onKeyDown()` | ← → 透传给 B 站播放器 (seek) |
-| iframe 自动聚焦 | `content.js` → `finishLoad()` | 加载完成后自动聚焦 iframe，Space/←→ 即用 |
-| 视频结束自动前进 | `content.js` → `onMessage()` | 监听播放器的 postMessage `video_ended` |
-| 切换按钮 | `content.js` 末尾 + `content.css` → `#bikbok-toggle-btn` | 固定右下角粉红色按钮 |
+| 全屏覆盖层 | `modules/ui.js` → `createOverlay()` | 双 iframe 槽位 + 标题/计数/提示 |
+| 视频加载 | `modules/player.js` → `loadVideo()` | iframe.src → UI 更新 → 超时保护 → 自动回退 |
+| 双槽位预加载 | `modules/player.js` → `preloadVideo()` / `swapAndPlayPreloaded()` | 零延迟切换，visibility:hidden 保留 contentDocument |
+| 播放器设置 | `modules/player.js` → `setupPlayerInIframe()` | 轮询触发网页全屏 → 注入隐藏样式 → 绑定 video.ended |
+| 键盘导航 | `modules/input.js` → `onKeyDown()` | ↑↓ 切视频 / Escape 退出 / F 全屏 / I O 倍速 |
+| 视频快进/快退 | 透传 (不拦截) | ← → 直接进入 B 站播放器处理 seek |
+| 视频结束自动前进 | `modules/input.js` → `onMessage()` | 监听播放器 postMessage `video_ended` |
+| iframe 键转发 | `modules/player.js` `setupPlayerInIframe` / `swapAndPlayPreloaded` | iframe 内捕获 Escape/↑↓/F/I/O 通过 postMessage 转发父窗口 |
+| 切换按钮 | `content.js` 末尾 + `content.css` | 固定右下角粉色按钮 |
 
 ## CODE MAP
 
-| 函数 | 行 | 分类 | 作用 |
-|------|-----|------|------|
-| `init()` | ~1010 | 入口 | 进入 TikTok 全屏模式，编排隐藏页面→创建覆盖层→加载视频→绑定监听 |
-| `cleanup()` | ~955 | 退出 | 清除计时器→退出全屏→移除 DOM→恢复页面→解绑监听 |
-| `extractVideoCards()` | ~51 | 提取 | DOM 提取 BV ID + 标题，Set 去重 |
-| `ensureVideosAvailable()` | ~145 | 提取 | Refill 编排器：先 DOM 提取→再点击换一换，最多 3 次重试 |
-| `createOverlay()` | ~363 | UI | 构建 #bikbok-overlay 及所有子元素 (iframe/标题/计数/提示) |
-| `loadVideo(index)` | ~416 | 播放 | 核心加载器：设置 iframe.src→UI 更新→超时保护→自动前进回退 |
-| `setupPlayerInIframe(gen)` | ~571 | 播放 | 轮询触发网页全屏→注入隐藏样式→绑定 video.ended，带 gen 防过期 |
-| `onKeyDown(e)` | ~832 | 事件 | 键盘导航：Escape 退出 / F 全屏 / ↑↓ 切视频 / Space ← → 透传 |
-| `onMessage(e)` | ~902 | 事件 | postMessage 监听：视频结束自动前进 |
-| `toggleFullscreen()` | ~671 | 全屏 | F 键切换 overlay 浏览器全屏 |
-| `finishLoad()` | ~484 | 辅助 | 隐藏 loading → 显示 iframe → 自动聚焦 |
+| 函数 | 模块 | 分类 | 作用 |
+|------|------|------|------|
+| `init()` | content.js | 入口 | 编排：隐藏页面→创建覆盖层→绑定 iframe 事件→加载视频→绑定监听 |
+| `cleanup()` | content.js | 退出 | 清除计时器→退出全屏→移除 DOM→恢复页面→解绑监听 |
+| `nextVideo()` | content.js | 导航 | 三级处理：refill/预加载交换/正常前进 |
+| `prevVideo()` | content.js | 导航 | 后退 + 触发前方预加载 |
+| `extractVideoCards()` | modules/extract.js | 提取 | DOM 提取 BV ID + 标题，Set 去重 |
+| `ensureVideosAvailable()` | modules/extract.js | 提取 | Refill 编排器 |
+| `createOverlay()` | modules/ui.js | UI | 构建 #bikbok-overlay + 双 iframe 槽位 |
+| `updateUI()` | modules/ui.js | UI | 标题 + 计数 ("N / M") |
+| `loadVideo(index)` | modules/player.js | 播放 | 核心加载器 |
+| `preloadVideo(index)` | modules/player.js | 播放 | 后台预加载下一个视频 |
+| `swapAndPlayPreloaded()` | modules/player.js | 播放 | 交换槽位，零延迟切换 |
+| `setupPlayerInIframe(gen)` | modules/player.js | 播放 | 轮询网页全屏 + 注入样式 + 绑定 ended |
+| `adjustSpeed(delta)` | modules/player.js | 倍速 | I/O 键倍速控制 (0.25-3.0x) |
+| `onKeyDown(e)` | modules/input.js | 事件 | Escape/F/↑↓/I/O 键处理 |
+| `onMessage(e)` | modules/input.js | 事件 | postMessage video_ended 监听 |
+| `handlePreloadLoaded()` | modules/player.js | 预加载 | 暂停+静音预加载视频 |
+| `finishLoad()` | modules/player.js | 辅助 | 隐藏 loading → 显示 iframe → 自动聚焦 |
 
 ## CONVENTIONS
 
 - **MV3 content script**，`run_at: document_end`，仅主页（`pathname` 为 `/` 或 `/index.html`）
-- **无外部依赖** — 纯 vanilla JS，无框架，无 API 调用
+- **无外部依赖** — 纯 vanilla JS，无框架，无 API 调用，无构建步骤
+- **`window.__bikbok` 命名空间** — 所有模块通过此全局对象共享状态，按 manifest `js` 数组顺序加载
+- **IIFE + strict mode** — 所有代码包裹在 `(function (api) { 'use strict'; ... })(window.__bikbok)` 中
 - **CSS 类命名空间** — 所有选择器以 `#bikbok-overlay` 或 `#bikbok-toggle-btn` 为前缀，防止污染 B 站页面
-- **IIFE + strict mode** — 所有代码包裹在 `(function () { 'use strict'; ... })();` 中
-- **textContent** — 所有用户可见文本均使用 `textContent` 设置（防止 XSS）
+- **`textContent`** — 所有用户可见文本均使用 `textContent` 设置（防止 XSS）
 - **原始 display 值恢复** — 隐藏元素时将 `node.style.display` 保存为 `{el, display}`，恢复时还原原始值
-- **Generation counter** — `iframeLoadGen` 用于异步竞态安全，所有回调检查 `gen === iframeLoadGen`
+- **Generation counter** — `iframeLoadGen` 和 `preloadGen` 用于异步竞态安全，所有回调检查 `gen === iframeLoadGen`
 - **按钮始终在 DOM** — `toggleBtn` 创建一次，仅通过 `display` 控制显隐，不 `remove()` 或重建
 - **postMessage 来源严格匹配** — `e.origin ===`（非 `startsWith`），精确校验播放器来源
-- **所有函数均有 JSDoc** — `@param` / `@returns` 文档注释覆盖全部函数
 
 ## ANTI-PATTERNS (本项目)
 
 - **禁止 `innerHTML`** 设置用户控制的内容 — 仅用于静态 HTML
 - **禁止 `as any` / `@ts-ignore`** — 本项目是 vanilla JS
 - **禁止硬编码 CSS 样式于 JS 中** — 结构内联样式除外（`position: fixed; inset: 0`）
-- **禁止 `var`** — 但 `hidePage` / `showPage` 中保存/恢复 display 值模式必须使用 `var` 以保证兼容性
 - **禁止 API 调用 B 站接口** — 依赖 DOM 提取（避免 WBI 签名复杂度和法律风险）
 - **始终用中文回复** — 无论用户使用什么语言，AI 助手都必须用中文回复
 - **禁止控制台日志输出**
-- **向用户提问时使用 `question` 工具** — 当需要用户做出选择或确认时，使用 `question` 工具而非纯文本提问，提供清晰的选项
+- **向用户提问时使用 `question` 工具** — 当需要用户做出选择或确认时，使用 `question` 工具而非纯文本提问
+- **禁止打破模块加载顺序** — manifest `js` 数组顺序不可变更，新增文件必须插入正确位置
+- **禁止模块间循环依赖** — 通过 `state.navigation` 注册表打破 content.js ↔ input.js 循环
 
 ## UNIQUE STYLES
 
-- B 站首页通过 `HOME_PAGE_PATHS = new Set(['/', '/index.html'])` 检测
+- B 站首页通过 `HOME_PAGE_PATHS = new Set(['/', '/index.html'])` 检测，非首页立即返回
 - iframe 播放器 URL: `www.bilibili.com/video/BV{ID}/`（完整视频页面，自动触发网页全屏）
-- 原始 B 站内容通过隐藏多个常见选择器（`.bili-video-card`、`.feed-card`、`main` 等）来隐藏，并使用 `z-index: 999999` 覆盖层覆盖其余内容
-- 自动前进回退计时器: 接收到 `postMessage` 事件后立即响应，若未收到则在 5 分钟后回退
+- **双槽位预加载**：同时创建 2 个 iframe，预加载槽位使用 `visibility:hidden`（保留 contentDocument 可访问性）
+- 预加载视频立即暂停 + 静音，带 `earlyMuteTimerId` 轮询防音频泄露
+- 自动前进回退计时器: 接收到 `postMessage` / `video.ended` 事件后立即响应，若未收到则在 5 分钟后回退
 - 视频计数显示（"N / M"）为 1-based，多于 1 个视频时可见
 - F 键全屏目标为外层 `#bikbok-overlay`，非内部 iframe；iframe 内部 F 键被拦截并 postMessage 转发
+- I/O 键倍速控制：I 减速 0.25 / O 加速 0.25，范围 0.25-3.0x，居中显示倍速指示器
+- 三层键盘事件架构：`window` + `document` capture + iframe `postMessage` 转发，确保焦点不受限
 
 ## COMMANDS
 
@@ -103,19 +129,8 @@ Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。
 |------|------|
 | 查看 B 站首页 DOM 结构 | `navigate_page` → `https://www.bilibili.com` → `take_snapshot` |
 | 检查网络请求（推荐 API / 播放器 API） | `list_network_requests`，筛选 `xhr`/`fetch` 类型 |
-| 检查 B 站视频页播放器 HTML | `navigate_page` → `https://www.bilibili.com/video/BV{ID}` → `take_snapshot` |
-| 验证 iframe 嵌入播放器是否可用 | `navigate_page` → `https://player.bilibili.com/player.html?bvid={ID}&autoplay=1` |
 | 执行 JS 检查选择器 / DOM 状态 | `evaluate_script` → `() => document.querySelectorAll('...')` |
-| 加载扩展到 Chrome | 点击「加载未打包的扩展程序」→ `press_key`(Meta+Shift+G) 导航到项目目录 |
-
-### 开发流程
-
-```
-1. 用 chrome-devtools 打开 B 站首页，检查 DOM 结构 / 网络请求是否变化
-2. 修改 content.js / content.css / manifest.json
-3. 点击「更新」重新加载扩展（或通过 evaluate_script 调用 chrome.developerPrivate.reload）
-4. 刷新 B 站页面，手动验证功能
-```
+| 重载扩展 | `reload_extension`(id="ejhcbeehkfciknhcinkhnnbnchlemefe") |
 
 ### 功能验证流程
 
@@ -126,15 +141,16 @@ Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。
 2. navigate_page → B 站首页          # 确保在正确页面
 3. evaluate_script 检查按钮存在      # document.getElementById('bikbok-toggle-btn')
 4. click 按钮进入 TikTok 模式        # 检查: 按钮 display:none, overlay 存在
-5. press_key Escape 退出             # 检查: 按钮 display 恢复, overlay 已移除
-6. 重复 2-3 次确保循环进出无异常    # 验证状态清理完整，无残留或丢失
+5. press_key ArrowDown 切换视频      # 检查: counter 递增, iframe.src 变化
+6. press_key Escape 退出             # 检查: 按钮 display 恢复, overlay 已移除
+7. 重复 2-3 次确保循环进出无异常    # 验证状态清理完整，无残留或丢失
 ```
 
 **核心检查项**（通过 `evaluate_script` 查询）：
 
 | 阶段 | 按钮 `#bikbok-toggle-btn` | overlay `#bikbok-overlay` |
 |------|--------------------------|--------------------------|
-| 页面初始 | `display: ""`, `textContent: "TikTok Mode"` | 不存在 |
+| 页面初始 | `display: ""`, `textContent: "bikbok"` | 不存在 |
 | TikTok 模式中 | `display: "none"`（隐藏，仍在 DOM 中） | 存在 |
 | ESC 退出后 | `display: ""`, 文本不变 | 已从 DOM 移除 |
 
@@ -151,3 +167,5 @@ Chrome MV3 扩展，将 B 站首页变为类似抖音的全屏视频播放器。
 - B 站标题主要存储在 `<img alt="...">` 属性中，而非 `<a>` 标签的 `textContent` 中
 - `www.bilibili.com` 的 postMessage 原始来源需精确匹配（`===`，非 `startsWith`）
 - 若未找到推荐视频，覆盖层将显示消息但仍可通过 Escape 键关闭
+- 模块间通过 `state.navigation = { nextVideo, prevVideo, cleanup }` 注册表解决循环依赖
+- `player.js` 中的 `navKeys` 数组决定哪些按键从 iframe 转发到父窗口，新增按键需同步更新两处（`setupPlayerInIframe` 和 `swapAndPlayPreloaded`）

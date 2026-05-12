@@ -87,4 +87,16 @@
     }
   };
 
+  api.showSpeedIndicator = function (speed) {
+    if (!api.overlay) return;
+    var prev = api.overlay.querySelector('.bikbok-speed-indicator');
+    if (prev) prev.remove();
+    clearTimeout(api.speedIndicatorTimer);
+    var el = document.createElement('div');
+    el.className = 'bikbok-speed-indicator';
+    el.textContent = speed + 'x';
+    api.overlay.appendChild(el);
+    api.speedIndicatorTimer = setTimeout(function () { if (el.parentNode) el.remove(); }, 1500);
+  };
+
 })(window.__bikbok);
