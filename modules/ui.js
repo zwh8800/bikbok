@@ -1,0 +1,90 @@
+/**
+ * bikbok — UI 模块
+ */
+(function (api) {
+  'use strict';
+
+  api.createOverlay = function () {
+    api.overlay = document.createElement('div');
+    api.overlay.id = 'bikbok-overlay';
+    api.overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#000;';
+    api.loadingEl = document.createElement('div');
+    api.loadingEl.className = 'bikbok-loading';
+    api.overlay.appendChild(api.loadingEl);
+    for (var slot = 0; slot < 2; slot++) {
+      var ifr = document.createElement('iframe');
+      ifr.className = slot === api.activeSlot ? 'bikbok-player bikbok-player-active' : 'bikbok-player bikbok-player-preload';
+      ifr.setAttribute('allow', 'autoplay; fullscreen');
+      api.iframes[slot] = ifr;
+      api.overlay.appendChild(ifr);
+    }
+    api.iframe = api.getActiveIframe();
+    api.titleEl = document.createElement('div');
+    api.titleEl.className = 'bikbok-title';
+    api.overlay.appendChild(api.titleEl);
+    api.counterEl = document.createElement('div');
+    api.counterEl.className = 'bikbok-counter';
+    api.overlay.appendChild(api.counterEl);
+    api.hintsEl = document.createElement('div');
+    api.hintsEl.className = 'bikbok-hints';
+    api.hintsEl.textContent = '\u2191 \u2193 to switch, \u2190 \u2192 to seek';
+    api.overlay.appendChild(api.hintsEl);
+    document.body.appendChild(api.overlay);
+  };
+
+  api.updateUI = function (index) {
+    const video = api.videos[index];
+    if (!video) return;
+    if (api.titleEl) api.titleEl.textContent = video.title;
+    if (api.counterEl) {
+      if (api.videos.length > 1) {
+        api.counterEl.textContent = `${index + 1} / ${api.videos.length}`;
+        api.counterEl.style.display = '';
+      } else {
+        api.counterEl.style.display = 'none';
+      }
+    }
+  };
+
+  api.showMessage = function (text, showRetry, retryCallback) {
+    if (!api.overlay) return;
+    const prev = api.overlay.querySelector('.bikbok-message');
+    if (prev) prev.remove();
+    const msg = document.createElement('div');
+    msg.className = 'bikbok-message';
+    msg.textContent = text;
+    if (showRetry) {
+      msg.appendChild(document.createElement('br'));
+      const btn = document.createElement('button');
+      btn.className = 'bikbok-retry';
+      btn.textContent = 'Retry';
+      btn.addEventListener('click', function () { msg.remove(); if (retryCallback) retryCallback(); });
+      msg.appendChild(btn);
+    }
+    api.overlay.appendChild(msg);
+  };
+
+  api.showEndMessage = function (text) {
+    if (!api.overlay) return;
+    var existing = api.overlay.querySelector('.bikbok-end');
+    if (existing) existing.remove();
+    var msg = document.createElement('div');
+    msg.className = 'bikbok-end';
+    msg.textContent = typeof text === 'string' ? text : 'End of recommendations \u2728';
+    api.overlay.appendChild(msg);
+  };
+
+  api.removeEndMessage = function () {
+    if (!api.overlay) return;
+    var el = api.overlay.querySelector('.bikbok-end');
+    if (el) el.remove();
+  };
+
+  api.hideHints = function () {
+    if (!api.hintsHidden && api.hintsEl) {
+      api.hintsHidden = true;
+      api.hintsEl.classList.add('bikbok-hints-hidden');
+    }
+  };
+
+})(window.__bikbok);

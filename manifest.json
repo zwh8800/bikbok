@@ -11,7 +11,14 @@
   "content_scripts": [
     {
       "matches": ["*://www.bilibili.com/*"],
-      "js": ["content.js"],
+      "js": [
+        "modules/state.js",
+        "modules/extract.js",
+        "modules/player.js",
+        "modules/ui.js",
+        "modules/input.js",
+        "content.js"
+      ],
       "css": ["content.css"],
       "run_at": "document_end"
     }

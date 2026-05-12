@@ -1,0 +1,74 @@
+/**
+ * bikbok — 共享状态与常量
+ */
+(function (api) {
+  'use strict';
+
+  // ── 全局配置 ──────────────────────────────────────────────
+  api.DEBOUNCE_MS = 300;
+  api.LOADING_TIMEOUT_MS = 15000;
+  api.AUTO_ADVANCE_FALLBACK_MS = 300000;
+  api.PLAYER_ORIGIN = 'https://www.bilibili.com';
+  api.HOME_PAGE_PATHS = new Set(['/', '/index.html']);
+  api.WEBFULLSCREEN_POLL_INTERVAL = 200;
+  api.WEBFULLSCREEN_TIMEOUT_MS = 10000;
+  api.IFRAME_HIDE_SELECTORS = [
+    '.bili-header',
+    '.recommend-list',
+    '.video-toolbar',
+    '#comment',
+    '.bili-footer',
+    '.left-container .video-pod',
+    '.video-page-special',
+  ];
+
+  // ── 全局状态 ──────────────────────────────────────────────
+  api.videos = [];
+  api.seenBvids = new Set();
+  api.currentIndex = 0;
+  api.lastNavTime = 0;
+  api.hintsHidden = false;
+  api.isTransitioning = false;
+  api.autoAdvanceTimer = null;
+  api.refillPromise = null;
+  api.refreshAttempts = 0;
+  api.REFILL_THRESHOLD = 3;
+  api.MAX_REFRESH_ATTEMPTS = 3;
+  api.iframeLoadGen = 0;
+  api.loadingTimeoutId = null;
+  api.setupTimerId = null;
+  api.earlyMuteTimerId = null;
+
+  // ── 双 iframe 槽位系统 ────────────────────────────────────
+  api.iframes = [null, null];
+  api.activeSlot = 0;
+  api.preloadIndex = -1;
+  api.preloadGen = 0;
+  api.preloadReady = false;
+
+  api.getActiveIframe = function () {
+    return api.iframes[api.activeSlot];
+  };
+
+  api.getPreloadIframe = function () {
+    return api.iframes[1 - api.activeSlot];
+  };
+
+  // ── DOM 引用 ──────────────────────────────────────────────
+  api.overlay = null;
+  api.iframe = null;
+  api.titleEl = null;
+  api.counterEl = null;
+  api.hintsEl = null;
+  api.loadingEl = null;
+  api.toggleBtn = null;
+  api.hiddenElements = [];
+
+  // ── 导航注册表 ────────────────────────────────────────────
+  api.navigation = {
+    nextVideo: null,
+    prevVideo: null,
+    cleanup: null,
+  };
+
+})(window.__bikbok = window.__bikbok || {});
