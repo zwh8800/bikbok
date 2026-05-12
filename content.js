@@ -470,16 +470,6 @@
     loadingEl.classList.remove('bikbok-loading-hidden');
     getActiveIframe().style.opacity = '0';
 
-    // 在加载新视频之前暂停当前视频，防止新旧视频声音重叠
-    var oldIfr = getActiveIframe();
-    if (oldIfr && oldIfr.contentDocument) {
-      var oldVideo = oldIfr.contentDocument.querySelector('video');
-      if (oldVideo) {
-        oldVideo.pause();
-        oldVideo.muted = true;
-      }
-    }
-
     // 通过修改 src 加载视频
     getActiveIframe().src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
 
