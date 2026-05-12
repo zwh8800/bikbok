@@ -7,7 +7,7 @@
  * 
  * 整体流程：
  * 1. 从首页 DOM 中提取推荐视频列表（BV 编号 + 标题）
- * 2. 用户点击右下角「TikTok Mode」按钮进入全屏模式
+ * 2. 用户点击右下角「bikbok」按钮进入全屏模式
  * 3. Arrow Up/Down 切换视频，Arrow Left/Right 透传给播放器快进/快退，F 切换浏览器全屏，Escape 退出
  * 4. 监听播放器 postMessage 实现视频播完自动前进
  * 5. 视频池耗尽时自动从 DOM 重新提取，若仍无新视频则点击「换一换」按钮刷新推荐
@@ -1343,7 +1343,7 @@
   // 按钮通过 display 控制显隐，全程保持在 DOM 中（不 remove/重新创建）
   var toggleBtn = document.createElement('button');
   toggleBtn.id = 'bikbok-toggle-btn';
-  toggleBtn.textContent = 'TikTok Mode';
+  toggleBtn.textContent = 'bikbok';
   toggleBtn.addEventListener('click', function () {
     toggleBtn.style.display = 'none';
     init();
