@@ -43,6 +43,12 @@
       api.showSpeedIndicator(faster);
       return;
     }
+    if (e.key === 'b' || e.key === 'B') {
+      e.preventDefault();
+      e.stopPropagation();
+      api.navigation.cleanup();
+      return;
+    }
     if (e.key === ' ') return;
     const now = Date.now();
     if (now - api.lastNavTime < api.DEBOUNCE_MS) return;

@@ -184,6 +184,17 @@
   $.navigation.prevVideo = prevVideo;
   $.navigation.cleanup = cleanup;
 
+  // ── B 键全局切换 ──────────────────────────────────────────
+  window.addEventListener('keydown', function (e) {
+    if (e.key !== 'b' && e.key !== 'B') return;
+    var active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if ($.overlay) { cleanup(); }
+    else { $.toggleBtn.style.display = 'none'; init(); }
+  }, true);
+
   // ── 模式切换按钮 ───────────────────────────────────────────
   var toggleBtn = document.createElement('button');
   toggleBtn.id = 'bikbok-toggle-btn';

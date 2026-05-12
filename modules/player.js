@@ -153,7 +153,7 @@
     }
     var doc = activeIfr.contentDocument;
     doc.addEventListener('keydown', function (e) {
-      var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O'];
+      var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B'];
       if (navKeys.indexOf(e.key) !== -1) {
         window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
         e.preventDefault(); e.stopPropagation();
@@ -226,14 +226,14 @@
       api.injectIframeHideStyles(doc);
       api.attachVideoEndedListener(doc, gen);
       doc.addEventListener('keydown', function (e) {
-        var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O'];
-        if (navKeys.indexOf(e.key) !== -1) {
-          window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
-          e.preventDefault(); e.stopPropagation();
-        }
-      }, true);
+var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B'];
+    if (navKeys.indexOf(e.key) !== -1) {
+      window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
+      e.preventDefault(); e.stopPropagation();
     }
-    api.updateUI(api.currentIndex);
+  }, true);
+}
+api.updateUI(api.currentIndex);
     api.showTitleBriefly();
     api.hideHints();
     api.autoAdvanceTimer = setTimeout(function () {
