@@ -4,7 +4,7 @@
  * 模块架构（按 manifest.json 顺序加载，共享 window.__bikbok 命名空间）：
  *   modules/state.js   — 共享状态与常量
  *   modules/extract.js — 视频提取管道
- *   modules/player.js  — 播放器管理
+ *   modules/player.js  — 播放器管理（三槽位双向预加载）
  *   modules/ui.js      — UI 组件
  *   modules/input.js   — 事件处理
  *   content.js         — 入口
@@ -14,14 +14,10 @@
 
   var $ = window.__bikbok;
 
-  // ── 仅在 B 站首页执行 ──────────────────────────────────────
   if (!$.HOME_PAGE_PATHS.has(window.location.pathname)) return;
 
-  // ── 初始化视频池 ───────────────────────────────────────────
   $.videos = $.extractVideoCards();
   $.videos.forEach(function (v) { $.seenBvids.add(v.bvid); });
-
-  // ── 页面隐藏 / 恢复 ───────────────────────────────────────
 
   function hidePage() {
     document.documentElement.style.overflow = 'hidden';
@@ -51,8 +47,6 @@
     $.hiddenElements.length = 0;
   }
 
-  // ── 导航 ──────────────────────────────────────────────────
-
   function nextVideo() {
     if ($.currentIndex >= $.videos.length - 1) {
       if ($.refillPromise !== null) { $.showEndMessage('Loading more...'); return; }
@@ -73,7 +67,7 @@
       $.refillPromise = $.ensureVideosAvailable();
       $.refillPromise.then(function () { $.refillPromise = null; $.updateUI($.currentIndex); $.removeEndMessage(); });
     }
-    if ($.preloadReady && $.preloadIndex === $.currentIndex + 1) { $.swapAndPlayPreloaded(); return; }
+    if ($.isForwardReady()) { $.swapForward(); return; }
     $.currentIndex++;
     $.loadVideo($.currentIndex);
     $.hideHints();
@@ -81,18 +75,18 @@
 
   function prevVideo() {
     if ($.currentIndex <= 0) return;
+    if ($.isBackwardReady()) { $.swapBackward(); return; }
     $.currentIndex--;
     $.loadVideo($.currentIndex);
-    if ($.currentIndex + 1 < $.videos.length) $.preloadVideo($.currentIndex + 1);
     $.hideHints();
   }
-
-  // ── 入口 / 退出 ──────────────────────────────────────────
 
   function cleanup() {
     if ($.setupTimerId !== null) { clearInterval($.setupTimerId); $.setupTimerId = null; }
     if ($.loadingTimeoutId !== null) { clearTimeout($.loadingTimeoutId); $.loadingTimeoutId = null; }
-    if ($.earlyMuteTimerId !== null) { clearInterval($.earlyMuteTimerId); $.earlyMuteTimerId = null; }
+    for (var t = 0; t < 3; t++) {
+      if ($.earlyMuteTimerIds[t] !== null) { clearInterval($.earlyMuteTimerIds[t]); $.earlyMuteTimerIds[t] = null; }
+    }
     $.iframeLoadGen++;
     if ($.autoAdvanceTimer !== null) { clearTimeout($.autoAdvanceTimer); $.autoAdvanceTimer = null; }
     if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
@@ -117,10 +111,13 @@
     window.removeEventListener('message', $.onBikbokKey);
     if ($.toggleBtn) $.toggleBtn.style.display = '';
     $.activeSlot = 0;
-    $.preloadIndex = -1;
-    $.preloadGen = 0;
-    $.preloadReady = false;
-    $.iframes = [null, null];
+    $.forwardSlot = -1;
+    $.backwardSlot = -1;
+    $.slotIndex = [-1, -1, -1];
+    $.slotGen = [0, 0, 0];
+    $.slotReady = [false, false, false];
+    $.earlyMuteTimerIds = [null, null, null];
+    $.iframes = [null, null, null];
     $.iframe = null;
   }
 
@@ -132,12 +129,14 @@
     $.loadingTimeoutId = null;
     $.setupTimerId = null;
     $.iframeLoadGen = 0;
-    $.earlyMuteTimerId = null;
+    $.earlyMuteTimerIds = [null, null, null];
     $.activeSlot = 0;
-    $.preloadIndex = -1;
-    $.preloadGen = 0;
-    $.preloadReady = false;
-    $.iframes = [null, null];
+    $.forwardSlot = 1;
+    $.backwardSlot = -1;
+    $.slotIndex = [-1, -1, -1];
+    $.slotGen = [0, 0, 0];
+    $.slotReady = [false, false, false];
+    $.iframes = [null, null, null];
 
     if ($.videos.length === 0) {
       $.overlay = document.createElement('div');
@@ -156,7 +155,7 @@
     hidePage();
     $.createOverlay();
 
-    for (var slot = 0; slot < 2; slot++) {
+    for (var slot = 0; slot < 3; slot++) {
       if ($.iframes[slot]) {
         $.iframes[slot].addEventListener('load', (function (s) {
           return function () { $.onIframeLoad(s); };
@@ -167,10 +166,11 @@
       }
     }
 
+    $.slotIndex[0] = 0;
     $.loadVideo(0);
 
     if ($.videos.length > 1) {
-      setTimeout(function () { $.preloadVideo(1); }, 2000);
+      setTimeout(function () { $.preloadIntoSlot(1, 1); }, 2000);
     }
 
     document.addEventListener('keydown', $.onKeyDown, true);
@@ -178,19 +178,15 @@
     window.addEventListener('message', $.onMessage);
     window.addEventListener('message', $.onBikbokKey);
 
-    // 操作指南 8s 后自动消失
     setTimeout(function () { $.hideHints(); }, 8000);
 
-    // 自动进入浏览器全屏
     if ($.overlay.requestFullscreen) $.overlay.requestFullscreen().catch(function () {});
   }
 
-  // ── 导航注册表赋值 ────────────────────────────────────────
   $.navigation.nextVideo = nextVideo;
   $.navigation.prevVideo = prevVideo;
   $.navigation.cleanup = cleanup;
 
-  // ── B 键全局切换 ──────────────────────────────────────────
   window.addEventListener('keydown', function (e) {
     if (e.key !== 'b' && e.key !== 'B') return;
     var active = document.activeElement;
@@ -201,7 +197,6 @@
     else { $.toggleBtn.style.display = 'none'; init(); }
   }, true);
 
-  // ── 模式切换按钮 ───────────────────────────────────────────
   var toggleBtn = document.createElement('button');
   toggleBtn.id = 'bikbok-toggle-btn';
   toggleBtn.textContent = 'bikbok';

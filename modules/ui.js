@@ -11,7 +11,7 @@
     api.loadingEl = document.createElement('div');
     api.loadingEl.className = 'bikbok-loading';
     api.overlay.appendChild(api.loadingEl);
-    for (var slot = 0; slot < 2; slot++) {
+    for (var slot = 0; slot < 3; slot++) {
       var ifr = document.createElement('iframe');
       ifr.className = slot === api.activeSlot ? 'bikbok-player bikbok-player-active' : 'bikbok-player bikbok-player-preload';
       ifr.setAttribute('allow', 'autoplay; fullscreen');

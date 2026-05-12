@@ -46,19 +46,35 @@
   api.SPEED_MIN = 0.25;
   api.SPEED_MAX = 3.0;
 
-  // ── 双 iframe 槽位系统 ────────────────────────────────────
-  api.iframes = [null, null];
+  // ── 三 iframe 槽位系统（双向预加载）───────────────────────
+  api.iframes = [null, null, null];
   api.activeSlot = 0;
-  api.preloadIndex = -1;
-  api.preloadGen = 0;
-  api.preloadReady = false;
+  api.forwardSlot = -1;
+  api.backwardSlot = -1;
+  api.slotIndex = [-1, -1, -1];
+  api.slotGen = [0, 0, 0];
+  api.slotReady = [false, false, false];
+  api.earlyMuteTimerIds = [null, null, null];
 
   api.getActiveIframe = function () {
     return api.iframes[api.activeSlot];
   };
 
-  api.getPreloadIframe = function () {
-    return api.iframes[1 - api.activeSlot];
+  api.isForwardReady = function () {
+    return api.forwardSlot >= 0 && api.slotReady[api.forwardSlot]
+      && api.slotIndex[api.forwardSlot] === api.currentIndex + 1;
+  };
+
+  api.isBackwardReady = function () {
+    return api.backwardSlot >= 0 && api.slotReady[api.backwardSlot]
+      && api.slotIndex[api.backwardSlot] === api.currentIndex - 1;
+  };
+
+  api.findFreeSlot = function () {
+    for (var i = 0; i < 3; i++) {
+      if (i !== api.activeSlot && i !== api.forwardSlot && i !== api.backwardSlot) return i;
+    }
+    return -1;
   };
 
   // ── DOM 引用 ──────────────────────────────────────────────
