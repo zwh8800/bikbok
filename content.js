@@ -177,6 +177,9 @@
     window.addEventListener('keydown', $.onKeyDown, true);
     window.addEventListener('message', $.onMessage);
     window.addEventListener('message', $.onBikbokKey);
+
+    // 自动进入浏览器全屏
+    if ($.overlay.requestFullscreen) $.overlay.requestFullscreen().catch(function () {});
   }
 
   // ── 导航注册表赋值 ────────────────────────────────────────
