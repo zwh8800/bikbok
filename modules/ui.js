@@ -48,9 +48,9 @@
     api.titleEl = document.createElement('div');
     api.titleEl.className = 'bikbok-title';
     api.overlay.appendChild(api.titleEl);
-    api.counterEl = document.createElement('div');
-    api.counterEl.className = 'bikbok-counter';
-    api.overlay.appendChild(api.counterEl);
+    // api.counterEl = document.createElement('div');
+    // api.counterEl.className = 'bikbok-counter';
+    // api.overlay.appendChild(api.counterEl);
     api.hintsEl = document.createElement('div');
     api.hintsEl.className = 'bikbok-hints';
     api.hintsEl.textContent = '↑ ↓ 切换视频\n← → 快进快退\nSpace 播放/暂停\nF 全屏\nI O 倍速\nEsc 退出';
