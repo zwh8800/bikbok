@@ -49,6 +49,16 @@
       api.navigation.cleanup();
       return;
     }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (!api.overlay) return;
+      setTimeout(function () {
+        var activeIfr = api.getActiveIframe();
+        if (!activeIfr || !activeIfr.contentDocument) return;
+        var video = activeIfr.contentDocument.querySelector('video');
+        if (video) api.showProgressIndicator(video.currentTime, video.duration);
+      }, 100);
+      return;
+    }
     if (e.key === ' ') return;
     const now = Date.now();
     if (now - api.lastNavTime < api.DEBOUNCE_MS) return;
