@@ -27,7 +27,7 @@
     api.overlay.appendChild(api.counterEl);
     api.hintsEl = document.createElement('div');
     api.hintsEl.className = 'bikbok-hints';
-    api.hintsEl.textContent = '\u2191 \u2193 to switch, \u2190 \u2192 to seek';
+    api.hintsEl.textContent = '↑ ↓ 切换视频\n← → 快进快退\nSpace 播放/暂停\nF 全屏\nI O 倍速\nEsc 退出';
     api.overlay.appendChild(api.hintsEl);
     document.body.appendChild(api.overlay);
   };

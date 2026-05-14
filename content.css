@@ -101,8 +101,9 @@
   transform: translateX(-50%);
   color: rgba(255, 255, 255, 0.5);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.8;
   text-align: center;
+  white-space: pre-line;
   pointer-events: none;
   z-index: 2;
   transition: opacity 0.5s ease;
