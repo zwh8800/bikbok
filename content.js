@@ -23,6 +23,35 @@
 
   if (!$.HOME_PAGE_PATHS.has(window.location.pathname)) return;
 
+  var debugTimerId = null;
+
+  function logIframeStates() {
+    var overlay = document.getElementById('bikbok-overlay');
+    if (!overlay) return;
+    var now = new Date().toISOString().slice(11, 19);
+    var lines = [];
+    for (var i = 0; i < 3; i++) {
+      var ifr = overlay.querySelectorAll('iframe')[i];
+      if (!ifr) { lines.push('  slot' + i + ': no iframe'); continue; }
+      var bvid = (ifr.src.match(/\/video\/(BV[a-zA-Z0-9]+)/) || [])[1] || 'empty';
+      var vinfo = '-';
+      try {
+        var doc = ifr.contentDocument;
+        if (doc) {
+          var v = doc.querySelector('video');
+          if (v) {
+            var ct = v.currentTime.toFixed(1);
+            var dur = isNaN(v.duration) ? '?' : v.duration.toFixed(1);
+            vinfo = ct + '/' + dur + (v.paused ? ' PAUSED' : '▶') + (v.muted ? ' MUTED' : '');
+          } else { vinfo = 'no video el'; }
+        } else { vinfo = 'no contentDoc'; }
+      } catch (e) { vinfo = 'x-origin'; }
+      lines.push('  slot' + i + ' [' + ifr.className.replace('bikbok-player ', '').replace('bikbok-player-', '') + '] ' + bvid + ' ' + vinfo);
+    }
+    lines.push('  currentIndex=' + $.currentIndex + ' activeSlot=' + $.activeSlot + ' fwd=' + $.forwardSlot + ' bwd=' + $.backwardSlot);
+    console.debug('[bikbok ' + now + ']', '\n' + lines.join('\n'));
+  }
+
   $.videos = $.extractVideoCards();
   $.videos.forEach(function (v) { $.seenBvids.add(v.bvid); });
 
@@ -159,6 +188,8 @@
    * @returns {void}
    */
   function cleanup() {
+    // 0. 停止调试日志
+    if (debugTimerId !== null) { clearInterval(debugTimerId); debugTimerId = null; }
     // 1. 停止所有计时器
     if ($.setupTimerId !== null) { clearInterval($.setupTimerId); $.setupTimerId = null; }
     if ($.loadingTimeoutId !== null) { clearTimeout($.loadingTimeoutId); $.loadingTimeoutId = null; }
@@ -287,6 +318,10 @@
     if ($.videos.length > 1) {
       setTimeout(function () { $.preloadIntoSlot(1, 1); }, 2000);
     }
+
+    // 步骤 8.5: 启动调试日志（每 3s 打印三槽位播放状态）
+    logIframeStates();
+    debugTimerId = setInterval(logIframeStates, 3000);
 
     // 步骤 9: 绑定键盘 / message 事件监听器（双层 keydown + postMessage）
     document.addEventListener('keydown', $.onKeyDown, true);
