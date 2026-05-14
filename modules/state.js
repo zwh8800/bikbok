@@ -16,8 +16,6 @@
   api.DEBOUNCE_MS = 300;
   /** @constant {number} 视频加载超时毫秒数，超时后自动回退到下一个视频 */
   api.LOADING_TIMEOUT_MS = 15000;
-  /** @constant {number} 自动前进回退毫秒数，视频结束后若未收到 ended 事件则超时触发 */
-  api.AUTO_ADVANCE_FALLBACK_MS = 300000;
   /** @constant {string} B 站播放器 iframe 的精确来源，用于 postMessage 校验 */
   api.PLAYER_ORIGIN = 'https://www.bilibili.com';
   /** @constant {Set<string>} 首页路径集合，用于判断当前页面是否为 B 站首页 */
@@ -50,8 +48,6 @@
   api.hintsHidden = false;
   /** @type {boolean} 是否正在切换视频，loadVideo 的防重入守卫 */
   api.isTransitioning = false;
-  /** @type {number|null} 自动前进回退 setTimeout 定时器 ID */
-  api.autoAdvanceTimer = null;
   /** @type {Promise|null} 视频池 refill 操作的 Promise，用于防止重复触发 */
   api.refillPromise = null;
   /** @type {number} 已尝试的刷新次数 */

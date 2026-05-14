@@ -22,7 +22,7 @@
    *
    * 执行流程：
    *  1. 防重入检查 + 代数递增
-   *  2. 清理旧定时器（autoAdvanceTimer、loadingTimeout、setupTimer）
+   *  2. 清理旧定时器（loadingTimeout、setupTimer）
    *  3. 显示加载动画、隐藏旧 iframe（opacity: 0）
    *  4. 暂停旧视频 → 设置新 iframe.src
    *  5. 更新 UI + 启动加载超时兜底 + 自动前进回退定时器
@@ -39,8 +39,6 @@
     var loadGen = api.iframeLoadGen;
     const video = api.videos[index];
     if (!video) { api.isTransitioning = false; return; }
-    // 清理旧定时器，防止竞态
-    if (api.autoAdvanceTimer !== null) { clearTimeout(api.autoAdvanceTimer); api.autoAdvanceTimer = null; }
     if (api.loadingTimeoutId !== null) { clearTimeout(api.loadingTimeoutId); api.loadingTimeoutId = null; }
     if (api.setupTimerId !== null) { clearInterval(api.setupTimerId); api.setupTimerId = null; }
     api.loadingEl.classList.remove('bikbok-loading-hidden');
@@ -60,13 +58,6 @@
         api.finishLoad();
       }
     }, api.LOADING_TIMEOUT_MS);
-    // 5 分钟回退：未收到 ended 事件时的兜底
-    api.autoAdvanceTimer = setTimeout(function () {
-      if (api.currentIndex < api.videos.length - 1) {
-        api.currentIndex++;
-        api.loadVideo(api.currentIndex);
-      }
-    }, api.AUTO_ADVANCE_FALLBACK_MS);
     api.isTransitioning = false;
     api.slotIndex[api.activeSlot] = index;
     api.slotReady[api.activeSlot] = false;
@@ -266,7 +257,6 @@
    * @returns {void}
    */
   api.onVideoEndedInIframe = function () {
-    if (api.autoAdvanceTimer !== null) { clearTimeout(api.autoAdvanceTimer); api.autoAdvanceTimer = null; }
     if (api.currentIndex < api.videos.length - 1) api.navigation.nextVideo();
   };
 
@@ -359,7 +349,6 @@
         api.slotReady[api.activeSlot] = true;
         api.finishLoad();
         api.ensurePreloads();
-        resetAutoAdvanceFallback(currentDoc);
       } else if (pollCount >= maxPolls) {
         // 超时仍继续：即使没有网页全屏，也要注入样式并完成加载
         clearInterval(api.setupTimerId); api.setupTimerId = null;
@@ -368,7 +357,6 @@
         api.slotReady[api.activeSlot] = true;
         api.finishLoad();
         api.ensurePreloads();
-        resetAutoAdvanceFallback(currentDoc);
       }
     }, api.WEBFULLSCREEN_POLL_INTERVAL);
   };
@@ -473,31 +461,6 @@
     }
     api.iframe = ifr;
     api.slotReady[slot] = true;
-    resetAutoAdvanceFallback(ifr.contentDocument);
-  }
-
-  // ── 基于视频时长的自动前进回退 ──────────────────────────────────────────
-
-  function resetAutoAdvanceFallback(doc) {
-    if (api.autoAdvanceTimer !== null) {
-      clearTimeout(api.autoAdvanceTimer);
-      api.autoAdvanceTimer = null;
-    }
-    if (api.currentIndex >= api.videos.length - 1) return;
-    var fallbackMs;
-    if (doc) {
-      var video = doc.querySelector('video');
-      if (video && video.duration && !isNaN(video.duration) && video.duration > 0) {
-        fallbackMs = video.duration * 1000 + 30000;
-      }
-    }
-    if (!fallbackMs) fallbackMs = api.AUTO_ADVANCE_FALLBACK_MS;
-    api.autoAdvanceTimer = setTimeout(function () {
-      if (api.currentIndex < api.videos.length - 1) {
-        api.currentIndex++;
-        api.loadVideo(api.currentIndex);
-      }
-    }, fallbackMs);
   }
 
   // ── 前向/后向槽位交换（零延迟切换 + 自动预加载后续视频）──────────────────────
@@ -522,7 +485,6 @@
     // 清理旧定时器
     if (api.setupTimerId !== null) { clearInterval(api.setupTimerId); api.setupTimerId = null; }
     if (api.loadingTimeoutId !== null) { clearTimeout(api.loadingTimeoutId); api.loadingTimeoutId = null; }
-    if (api.autoAdvanceTimer !== null) { clearTimeout(api.autoAdvanceTimer); api.autoAdvanceTimer = null; }
     if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
 
     var oldActive = api.activeSlot;
@@ -581,7 +543,6 @@
     // 清理旧定时器
     if (api.setupTimerId !== null) { clearInterval(api.setupTimerId); api.setupTimerId = null; }
     if (api.loadingTimeoutId !== null) { clearTimeout(api.loadingTimeoutId); api.loadingTimeoutId = null; }
-    if (api.autoAdvanceTimer !== null) { clearTimeout(api.autoAdvanceTimer); api.autoAdvanceTimer = null; }
     if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
 
     var oldActive = api.activeSlot;

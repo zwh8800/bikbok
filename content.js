@@ -199,9 +199,7 @@
     }
     // 2. 使异步回调失效
     $.iframeLoadGen++;
-    // 3. 清除自动前进回退
-    if ($.autoAdvanceTimer !== null) { clearTimeout($.autoAdvanceTimer); $.autoAdvanceTimer = null; }
-    // 4. 退出全屏
+    // 3. 退出全屏
     if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
     if ($.overlay && $.overlay.parentNode) {
       // 5. 释放 iframe 资源

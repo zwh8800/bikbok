@@ -124,7 +124,7 @@
    *   3. data 必须是 object 类型
    *
    * 灵活识别多种 ended 消息格式（type/event/info 字段均可为 'video_ended' 或 'ended'）。
-   * 收到 ended 后清除 autoAdvanceTimer 并触发 nextVideo()。
+   * 收到 ended 后触发 nextVideo()。
    *
    * @param {MessageEvent} e - postMessage 事件对象
    * @returns {void}
@@ -140,8 +140,6 @@
     // 灵活匹配多种 ended 通知格式：B 站播放器可能发送 type/event/info 字段为 'video_ended' 或 'ended'
     const isEnded = data.type === 'video_ended' || data.type === 'ended' || data.event === 'video_ended' || data.event === 'ended' || data.info === 'ended';
     if (isEnded && api.currentIndex < api.videos.length - 1) {
-      // 清除回退定时器，因为已经及时收到 ended 事件
-      if (api.autoAdvanceTimer !== null) { clearTimeout(api.autoAdvanceTimer); api.autoAdvanceTimer = null; }
       api.navigation.nextVideo();
     }
   };
