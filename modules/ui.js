@@ -87,6 +87,27 @@
     }
   };
 
+  api.showProgressIndicator = function (currentTime, duration) {
+    if (!api.overlay) return;
+    var prev = api.overlay.querySelector('.bikbok-progress-indicator');
+    if (prev) prev.remove();
+    clearTimeout(api.progressIndicatorTimer);
+    var el = document.createElement('div');
+    el.className = 'bikbok-progress-indicator';
+    function fmt(sec, showHours) {
+      if (!isFinite(sec) || sec < 0) return '--:--';
+      var h = showHours ? Math.floor(sec / 3600) : 0;
+      var m = Math.floor((sec % 3600) / 60);
+      var s = Math.floor(sec % 60);
+      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      return showHours ? h + ':' + pad(m) + ':' + pad(s) : pad(m) + ':' + pad(s);
+    }
+    var hasHours = isFinite(duration) && duration >= 3600;
+    el.textContent = fmt(currentTime, hasHours) + ' / ' + fmt(duration, hasHours);
+    api.overlay.appendChild(el);
+    api.progressIndicatorTimer = setTimeout(function () { if (el.parentNode) el.remove(); }, 1500);
+  };
+
   api.showSpeedIndicator = function (speed) {
     if (!api.overlay) return;
     var prev = api.overlay.querySelector('.bikbok-speed-indicator');

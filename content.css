@@ -230,6 +230,25 @@
   transform: scale(0.97);
 }
 
+/* ── 播放进度指示器 ────────────────────────────────────────────
+ * 居中显示当前播放进度（当前时间 / 总时长），短暂显示后自动消失 */
+#bikbok-overlay .bikbok-progress-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 28px;
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 8px;
+  z-index: 4;
+  pointer-events: none;
+  -webkit-font-smoothing: antialiased;
+  font-family: monospace;
+}
+
 /* ── 倍速指示器 ──────────────────────────────────────────────
  * 居中显示当前播放倍速，半透明深色背景，短暂显示后自动消失 */
 #bikbok-overlay .bikbok-speed-indicator {
