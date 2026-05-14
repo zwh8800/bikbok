@@ -36,14 +36,14 @@
     const video = api.videos[index];
     if (!video) return;
     if (api.titleEl) api.titleEl.textContent = video.title;
-    if (api.counterEl) {
-      if (api.videos.length > 1) {
-        api.counterEl.textContent = `${index + 1} / ${api.videos.length}`;
-        api.counterEl.style.display = '';
-      } else {
-        api.counterEl.style.display = 'none';
-      }
-    }
+    // if (api.counterEl) {
+    //   if (api.videos.length > 1) {
+    //     api.counterEl.textContent = `${index + 1} / ${api.videos.length}`;
+    //     api.counterEl.style.display = '';
+    //   } else {
+    //     api.counterEl.style.display = 'none';
+    //   }
+    // }
   };
 
   api.showMessage = function (text, showRetry, retryCallback) {
