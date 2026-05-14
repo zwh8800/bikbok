@@ -561,11 +561,6 @@
     } else if (nextIdx >= api.videos.length) {
       api.forwardSlot = -1;
     }
-
-    // 重启 5 分钟自动前进回退
-    api.autoAdvanceTimer = setTimeout(function () {
-      if (api.currentIndex < api.videos.length - 1) { api.currentIndex++; api.loadVideo(api.currentIndex); }
-    }, api.AUTO_ADVANCE_FALLBACK_MS);
   };
 
   /**
@@ -625,11 +620,6 @@
     } else if (prevIdx < 0) {
       api.backwardSlot = -1;
     }
-
-    // 重启 5 分钟自动前进回退
-    api.autoAdvanceTimer = setTimeout(function () {
-      if (api.currentIndex < api.videos.length - 1) { api.currentIndex++; api.loadVideo(api.currentIndex); }
-    }, api.AUTO_ADVANCE_FALLBACK_MS);
   };
 
   // ── 倍速控制（I 减速 / O 加速，0.25-3.0x，0.25x 步长）─────────────────
