@@ -484,14 +484,14 @@
       api.autoAdvanceTimer = null;
     }
     if (api.currentIndex >= api.videos.length - 1) return;
-    var fallbackMs = api.AUTO_ADVANCE_FALLBACK_MS;
+    var fallbackMs;
     if (doc) {
       var video = doc.querySelector('video');
       if (video && video.duration && !isNaN(video.duration) && video.duration > 0) {
-        var videoMs = video.duration * 1000;
-        if (videoMs > fallbackMs) fallbackMs = videoMs + 30000;
+        fallbackMs = video.duration * 1000 + 30000;
       }
     }
+    if (!fallbackMs) fallbackMs = api.AUTO_ADVANCE_FALLBACK_MS;
     api.autoAdvanceTimer = setTimeout(function () {
       if (api.currentIndex < api.videos.length - 1) {
         api.currentIndex++;
