@@ -328,12 +328,16 @@
       return;
     }
     var doc = activeIfr.contentDocument;
-    // navKeys 数组：需要从 iframe 内转发到父窗口的按键
+    // forwardKeys：需从 iframe 内 postMessage 转发到父窗口的按键
+    // blockKeys：需阻止默认行为防止 B 站播放器冲突的按键（← → 不在内，保留快进快退）
     // 注意：此列表需与 activateSlot() 中的列表保持同步
     doc.addEventListener('keydown', function (e) {
-      var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B'];
-      if (navKeys.indexOf(e.key) !== -1) {
+      var forwardKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'ArrowLeft', 'ArrowRight'];
+      var blockKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B'];
+      if (forwardKeys.indexOf(e.key) !== -1) {
         window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
+      }
+      if (blockKeys.indexOf(e.key) !== -1) {
         e.preventDefault(); e.stopPropagation();
       }
     }, true);
@@ -452,11 +456,15 @@
       if (wideBtn && !wideBtn.classList.contains('bpx-state-entered')) wideBtn.click();
       api.injectIframeHideStyles(doc);
       api.attachVideoEndedListener(doc, slot);
-      // navKeys 需与 setupPlayerInIframe 中的列表保持同步
+      // forwardKeys 需与 setupPlayerInIframe 中的列表保持同步
+      // blockKeys：阻止默认行为（← → 不在内，保留快进快退）
       doc.addEventListener('keydown', function (e) {
-        var navKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B'];
-        if (navKeys.indexOf(e.key) !== -1) {
+        var forwardKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'ArrowLeft', 'ArrowRight'];
+        var blockKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B'];
+        if (forwardKeys.indexOf(e.key) !== -1) {
           window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
+        }
+        if (blockKeys.indexOf(e.key) !== -1) {
           e.preventDefault(); e.stopPropagation();
         }
       }, true);

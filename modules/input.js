@@ -90,7 +90,7 @@
       api.navigation.cleanup();
       return;
     }
-    // ← → 键：不拦截事件（透传给 B 站播放器处理快进快退），延迟 100ms 等待 seek 生效后显示进度
+    // ← → 键：postMessage 异步到达后 B 站播放器 seek 尚未完成，延迟 200ms 确保读取到 seek 后的时间
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       if (!api.overlay) return;
       setTimeout(function () {
@@ -98,7 +98,7 @@
         if (!activeIfr || !activeIfr.contentDocument) return;
         var video = activeIfr.contentDocument.querySelector('video');
         if (video) api.showProgressIndicator(video.currentTime, video.duration);
-      }, 100);
+      }, 200);
       return;
     }
     // Space 键：透传给 B 站播放器处理播放/暂停
