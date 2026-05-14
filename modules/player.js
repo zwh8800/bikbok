@@ -359,6 +359,7 @@
         api.slotReady[api.activeSlot] = true;
         api.finishLoad();
         api.ensurePreloads();
+        resetAutoAdvanceFallback(currentDoc);
       } else if (pollCount >= maxPolls) {
         // 超时仍继续：即使没有网页全屏，也要注入样式并完成加载
         clearInterval(api.setupTimerId); api.setupTimerId = null;
@@ -367,6 +368,7 @@
         api.slotReady[api.activeSlot] = true;
         api.finishLoad();
         api.ensurePreloads();
+        resetAutoAdvanceFallback(currentDoc);
       }
     }, api.WEBFULLSCREEN_POLL_INTERVAL);
   };
@@ -471,6 +473,31 @@
     }
     api.iframe = ifr;
     api.slotReady[slot] = true;
+    resetAutoAdvanceFallback(ifr.contentDocument);
+  }
+
+  // ── 基于视频时长的自动前进回退 ──────────────────────────────────────────
+
+  function resetAutoAdvanceFallback(doc) {
+    if (api.autoAdvanceTimer !== null) {
+      clearTimeout(api.autoAdvanceTimer);
+      api.autoAdvanceTimer = null;
+    }
+    if (api.currentIndex >= api.videos.length - 1) return;
+    var fallbackMs = api.AUTO_ADVANCE_FALLBACK_MS;
+    if (doc) {
+      var video = doc.querySelector('video');
+      if (video && video.duration && !isNaN(video.duration) && video.duration > 0) {
+        var videoMs = video.duration * 1000;
+        if (videoMs > fallbackMs) fallbackMs = videoMs + 30000;
+      }
+    }
+    api.autoAdvanceTimer = setTimeout(function () {
+      if (api.currentIndex < api.videos.length - 1) {
+        api.currentIndex++;
+        api.loadVideo(api.currentIndex);
+      }
+    }, fallbackMs);
   }
 
   // ── 前向/后向槽位交换（零延迟切换 + 自动预加载后续视频）──────────────────────
