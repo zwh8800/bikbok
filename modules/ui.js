@@ -1,9 +1,32 @@
 /**
  * bikbok — UI 模块
+ *
+ * 负责所有 UI 元素的创建和更新：
+ *   - createOverlay(): 构建全屏覆盖层 + 三槽位 iframe + 标题 + 提示
+ *   - updateUI(): 更新视频标题（计数器已注释保留）
+ *   - 消息提示：showMessage/showEndMessage/removeEndMessage
+ *   - 指示器：showProgressIndicator（← → 进度）/ showSpeedIndicator（I O 倍速）
+ *   - 标题显示：showTitleBriefly（3 秒后自动渐隐）
+ *
+ * @module modules/ui
+ * @requires window.__bikbok (state.js)
  */
 (function (api) {
   'use strict';
 
+  /**
+   * 构建 #bikbok-overlay 全屏覆盖层 DOM 结构
+   *
+   * DOM 层级（按添加顺序）：
+   *   1. #bikbok-overlay 容器（position:fixed, inset:0, z-index:999999）
+   *   2. .bikbok-loading 加载动画
+   *   3. 三个 iframe 槽位（slot 0 为 .bikbok-player-active，其余为 .bikbok-player-preload）
+   *   4. .bikbok-title 视频标题
+   *   5. .bikbok-counter 视频计数器（当前已注释不显示）
+   *   6. .bikbok-hints 键盘操作提示
+   *
+   * @returns {void}
+   */
   api.createOverlay = function () {
     api.overlay = document.createElement('div');
     api.overlay.id = 'bikbok-overlay';
@@ -13,7 +36,10 @@
     api.overlay.appendChild(api.loadingEl);
     for (var slot = 0; slot < 3; slot++) {
       var ifr = document.createElement('iframe');
+      // activeSlot 槽位使用 bikbok-player-active 类（可见 + 最高 z-index）
+      // 其他槽位使用 bikbok-player-preload 类（visibility:hidden，保留 contentDocument 可访问）
       ifr.className = slot === api.activeSlot ? 'bikbok-player bikbok-player-active' : 'bikbok-player bikbok-player-preload';
+      // 允许 iframe 自动播放和全屏
       ifr.setAttribute('allow', 'autoplay; fullscreen');
       api.iframes[slot] = ifr;
       api.overlay.appendChild(ifr);
@@ -32,10 +58,20 @@
     document.body.appendChild(api.overlay);
   };
 
+  /**
+   * 更新覆盖层 UI（标题、计数器）
+   *
+   * 当前仅更新标题（通过 textContent 防止 XSS），
+   * 计数器代码已注释保留（调试时可恢复）。
+   *
+   * @param {number} index - 当前视频在 videos 数组中的索引
+   * @returns {void}
+   */
   api.updateUI = function (index) {
     const video = api.videos[index];
     if (!video) return;
     if (api.titleEl) api.titleEl.textContent = video.title;
+    // 计数器已注释（保留代码便于调试时恢复），当前仅更新标题
     // if (api.counterEl) {
     //   if (api.videos.length > 1) {
     //     api.counterEl.textContent = `${index + 1} / ${api.videos.length}`;
@@ -46,6 +82,17 @@
     // }
   };
 
+  /**
+   * 在覆盖层中央显示消息提示
+   *
+   * 先移除已有消息，再创建新的 .bikbok-message 元素。
+   * 如果 showRetry 为 true，附加一个「Retry」按钮。
+   *
+   * @param {string} text - 消息文本
+   * @param {boolean} [showRetry=false] - 是否显示重试按钮
+   * @param {Function} [retryCallback] - 点击重试按钮时的回调
+   * @returns {void}
+   */
   api.showMessage = function (text, showRetry, retryCallback) {
     if (!api.overlay) return;
     const prev = api.overlay.querySelector('.bikbok-message');
@@ -64,6 +111,14 @@
     api.overlay.appendChild(msg);
   };
 
+  /**
+   * 显示「推荐列表结束」消息
+   *
+   * 默认文案为 'End of recommendations ✨'，可通过参数自定义。
+   *
+   * @param {string} [text] - 自定义消息，默认使用内置文案
+   * @returns {void}
+   */
   api.showEndMessage = function (text) {
     if (!api.overlay) return;
     var existing = api.overlay.querySelector('.bikbok-end');
@@ -74,12 +129,27 @@
     api.overlay.appendChild(msg);
   };
 
+  /**
+   * 移除推荐列表结束消息
+   *
+   * 当 refill 成功后调用，移除之前显示的 .bikbok-end 元素。
+   *
+   * @returns {void}
+   */
   api.removeEndMessage = function () {
     if (!api.overlay) return;
     var el = api.overlay.querySelector('.bikbok-end');
     if (el) el.remove();
   };
 
+  /**
+   * 隐藏键盘操作提示
+   *
+   * 添加 .bikbok-hints-hidden 类触发 opacity 过渡渐隐，
+   * 通过 hintsHidden 标志防止重复操作（仅执行一次）。
+   *
+   * @returns {void}
+   */
   api.hideHints = function () {
     if (!api.hintsHidden && api.hintsEl) {
       api.hintsHidden = true;
@@ -87,13 +157,26 @@
     }
   };
 
+  /**
+   * 在覆盖层中央显示播放进度指示器（← → 键触发）
+   *
+   * 格式：MM:SS / MM:SS，当总时长 ≥ 60 分钟时自动切换为 HH:MM:SS。
+   * 指示器显示 1.5 秒后自动移除。
+   *
+   * @param {number} currentTime - 当前播放位置（秒）
+   * @param {number} duration - 视频总时长（秒）
+   * @returns {void}
+   */
   api.showProgressIndicator = function (currentTime, duration) {
     if (!api.overlay) return;
+    // 先移除已有指示器，避免堆叠
     var prev = api.overlay.querySelector('.bikbok-progress-indicator');
     if (prev) prev.remove();
+    // 清除旧定时器，重启 1.5s 倒计时
     clearTimeout(api.progressIndicatorTimer);
     var el = document.createElement('div');
     el.className = 'bikbok-progress-indicator';
+    // 时间格式化函数：根据 showHours 选择 HH:MM:SS 或 MM:SS
     function fmt(sec, showHours) {
       if (!isFinite(sec) || sec < 0) return '--:--';
       var h = showHours ? Math.floor(sec / 3600) : 0;
@@ -102,12 +185,22 @@
       var pad = function (n) { return (n < 10 ? '0' : '') + n; };
       return showHours ? h + ':' + pad(m) + ':' + pad(s) : pad(m) + ':' + pad(s);
     }
+    // 总时长 ≥ 3600 秒（60 分钟）时显示小时
     var hasHours = isFinite(duration) && duration >= 3600;
     el.textContent = fmt(currentTime, hasHours) + ' / ' + fmt(duration, hasHours);
     api.overlay.appendChild(el);
+    // 1.5s 后自动移除
     api.progressIndicatorTimer = setTimeout(function () { if (el.parentNode) el.remove(); }, 1500);
   };
 
+  /**
+   * 在覆盖层中央显示倍速指示器（I O 键触发）
+   *
+   * 显示格式："{speed}x"，1.5 秒后自动移除。
+   *
+   * @param {number} speed - 当前播放速率
+   * @returns {void}
+   */
   api.showSpeedIndicator = function (speed) {
     if (!api.overlay) return;
     var prev = api.overlay.querySelector('.bikbok-speed-indicator');
@@ -120,6 +213,14 @@
     api.speedIndicatorTimer = setTimeout(function () { if (el.parentNode) el.remove(); }, 1500);
   };
 
+  /**
+   * 短暂显示视频标题（视频切换后触发）
+   *
+   * 移除 .bikbok-title-hidden 类使标题恢复可见，
+   * 3 秒后自动添加该类触发 opacity 渐隐。
+   *
+   * @returns {void}
+   */
   api.showTitleBriefly = function () {
     if (!api.titleEl) return;
     clearTimeout(api.titleTimerId);
