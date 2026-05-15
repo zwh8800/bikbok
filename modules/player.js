@@ -322,8 +322,8 @@
     // blockKeys：需阻止默认行为防止 B 站播放器冲突的按键（← → 不在内，保留快进快退）
     // 注意：此列表需与 activateSlot() 中的列表保持同步
     doc.addEventListener('keydown', function (e) {
-      var forwardKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'ArrowLeft', 'ArrowRight', 'Enter'];
-      var blockKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'Enter'];
+       var forwardKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'z', 'Z', 'c', 'C', 'ArrowLeft', 'ArrowRight', 'Enter'];
+       var blockKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'z', 'Z', 'c', 'C', 'Enter'];
       if (forwardKeys.indexOf(e.key) !== -1) {
         window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
       }
@@ -456,11 +456,11 @@
       if (wideBtn && !isWebFullscreen) wideBtn.click();
       api.injectIframeHideStyles(doc);
       api.attachVideoEndedListener(doc, slot);
-      // forwardKeys 需与 setupPlayerInIframe 中的列表保持同步
-      // blockKeys：阻止默认行为（← → 不在内，保留快进快退）
-      doc.addEventListener('keydown', function (e) {
-        var forwardKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'ArrowLeft', 'ArrowRight', 'Enter'];
-        var blockKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'Enter'];
+       // forwardKeys 需与 setupPlayerInIframe 中的列表保持同步
+       // blockKeys：阻止默认行为（← → 不在内，保留快进快退）
+       doc.addEventListener('keydown', function (e) {
+         var forwardKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'z', 'Z', 'c', 'C', 'ArrowLeft', 'ArrowRight', 'Enter'];
+         var blockKeys = ['Escape', 'ArrowDown', 'ArrowUp', 'f', 'F', 'i', 'I', 'o', 'O', 'b', 'B', 'z', 'Z', 'c', 'C', 'Enter'];
         if (forwardKeys.indexOf(e.key) !== -1) {
           window.postMessage({ type: 'bikbok-key', key: e.key }, '*');
         }

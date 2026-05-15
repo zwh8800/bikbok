@@ -121,12 +121,36 @@
       api.showTitleBriefly();
       return;
     }
-    // Space 键：透传给 B 站播放器处理播放/暂停，同时显示标题
-    if (e.key === ' ') {
-      if (api.overlay) api.showTitleBriefly();
-      return;
-    }
-    // 300ms 防抖：防止快速连续按键导致视频切换过猛
+     // Space 键：透传给 B 站播放器处理播放/暂停，同时显示标题
+     if (e.key === ' ') {
+       if (api.overlay) api.showTitleBriefly();
+       return;
+     }
+     // Z 键：点赞
+     if (e.key === 'z' || e.key === 'Z') {
+       if (!api.overlay) return;
+       e.preventDefault();
+       e.stopPropagation();
+       var activeIfr = api.getActiveIframe();
+       if (activeIfr && activeIfr.contentDocument) {
+         var likeBtn = activeIfr.contentDocument.querySelector('.video-like.video-toolbar-left-item');
+         if (likeBtn) likeBtn.click();
+       }
+       return;
+     }
+     // C 键：收藏
+     if (e.key === 'c' || e.key === 'C') {
+       if (!api.overlay) return;
+       e.preventDefault();
+       e.stopPropagation();
+       var activeIfr = api.getActiveIframe();
+       if (activeIfr && activeIfr.contentDocument) {
+         var favBtn = activeIfr.contentDocument.querySelector('.video-fav.video-toolbar-left-item');
+         if (favBtn) favBtn.click();
+       }
+       return;
+     }
+     // 300ms 防抖：防止快速连续按键导致视频切换过猛
     const now = Date.now();
     if (now - api.lastNavTime < api.DEBOUNCE_MS) return;
     // ↑ ↓ 键：300ms 防抖，通过 navigation 注册表调用导航函数
