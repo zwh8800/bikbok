@@ -12,12 +12,12 @@
     {
       "matches": ["*://www.bilibili.com/*"],
       "js": [
-        "modules/state.js",
-        "modules/extract.js",
-        "modules/player.js",
-        "modules/ui.js",
-        "modules/input.js",
-        "content.js"
+        "dist/state.js",
+        "dist/extract.js",
+        "dist/player.js",
+        "dist/ui.js",
+        "dist/input.js",
+        "dist/content.js"
       ],
       "css": ["content.css"],
       "run_at": "document_end"

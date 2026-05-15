@@ -1,0 +1,16 @@
+{
+  "name": "bikbok",
+  "version": "1.0.2",
+  "description": "Transforms Bilibili homepage into a TikTok-like fullscreen video player.",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit",
+    "watch": "tsc --noEmit --watch"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.279",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.5.0"
+  }
+}
