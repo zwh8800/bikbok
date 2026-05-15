@@ -429,19 +429,19 @@
    * 触发网页全屏 → 注入隐藏样式 → 绑定 ended 事件 → 设置键盘转发。
    *
    * @param {number} slot - 要激活的槽位索引
-   * @param {number} gen - 当前代数，用于传递到 ended 事件监听
+   * @param {number} gen - 当前代数，用于传递到 ended 事件监听和竞态保护
    * @returns {void}
    */
   function activateSlot(slot, gen) {
     var ifr = api.iframes[slot];
     if (!ifr) return;
     ifr._blockPlay = false;
-    ifr.style.opacity = '1';
     ifr.focus();
     if (ifr.contentDocument) {
       var doc = ifr.contentDocument;
       var video = doc.querySelector('video');
       if (video) { video.currentTime = 0; video.muted = false; video.play().catch(function () {}); }
+      // 先尝试立即触发网页全屏
       var wideBtn = doc.querySelector('.bpx-player-ctrl-web');
       if (wideBtn && !wideBtn.classList.contains('bpx-state-entered')) wideBtn.click();
       api.injectIframeHideStyles(doc);
@@ -458,6 +458,46 @@
           e.preventDefault(); e.stopPropagation();
         }
       }, true);
+      // 修复时序问题：如果预加载 iframe 还没加载完就被激活，
+      // wideBtn 可能还不存在，需要轮询等待（竞态安全）
+      // 保持 loading 状态直到全屏触发成功或超时
+      var pollCount = 0;
+      var maxPolls = Math.floor(api.WEBFULLSCREEN_TIMEOUT_MS / api.WEBFULLSCREEN_POLL_INTERVAL);
+      var webFullscreenTimer = setInterval(function () {
+        // 竞态校验：槽位代数变化或不再是活动槽位则终止
+        if (gen !== api.slotGen[slot] || slot !== api.activeSlot) {
+          clearInterval(webFullscreenTimer);
+          ifr.style.opacity = '1';
+          if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
+          return;
+        }
+        pollCount++;
+        var currentDoc = ifr && ifr.contentDocument;
+        if (!currentDoc) {
+          clearInterval(webFullscreenTimer);
+          ifr.style.opacity = '1';
+          if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
+          return;
+        }
+        var btn = currentDoc.querySelector('.bpx-player-ctrl-web');
+        if (btn) {
+          // 找到按钮后触发（如果还没进入全屏状态）
+          if (!btn.classList.contains('bpx-state-entered')) btn.click();
+          // 全屏触发成功，显示 iframe 并隐藏 loading
+          clearInterval(webFullscreenTimer);
+          ifr.style.opacity = '1';
+          if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
+        } else if (pollCount >= maxPolls) {
+          // 超时终止（即使不进入全屏，视频仍可播放）
+          clearInterval(webFullscreenTimer);
+          ifr.style.opacity = '1';
+          if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
+        }
+      }, api.WEBFULLSCREEN_POLL_INTERVAL);
+    } else {
+      // iframe 文档不可用，直接显示
+      ifr.style.opacity = '1';
+      if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
     }
     api.iframe = ifr;
     api.slotReady[slot] = true;
@@ -485,7 +525,8 @@
     // 清理旧定时器
     if (api.setupTimerId !== null) { clearInterval(api.setupTimerId); api.setupTimerId = null; }
     if (api.loadingTimeoutId !== null) { clearTimeout(api.loadingTimeoutId); api.loadingTimeoutId = null; }
-    if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
+    // 先显示 loading，直到全屏触发成功后由 activateSlot 隐藏
+    if (api.loadingEl) api.loadingEl.classList.remove('bikbok-loading-hidden');
 
     var oldActive = api.activeSlot;
     var oldForward = api.forwardSlot;
@@ -543,7 +584,8 @@
     // 清理旧定时器
     if (api.setupTimerId !== null) { clearInterval(api.setupTimerId); api.setupTimerId = null; }
     if (api.loadingTimeoutId !== null) { clearTimeout(api.loadingTimeoutId); api.loadingTimeoutId = null; }
-    if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
+    // 先显示 loading，直到全屏触发成功后由 activateSlot 隐藏
+    if (api.loadingEl) api.loadingEl.classList.remove('bikbok-loading-hidden');
 
     var oldActive = api.activeSlot;
     var oldBackward = api.backwardSlot;

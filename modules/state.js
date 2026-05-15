@@ -21,7 +21,7 @@
   /** @constant {Set<string>} 首页路径集合，用于判断当前页面是否为 B 站首页 */
   api.HOME_PAGE_PATHS = new Set(['/', '/index.html']);
   /** @constant {number} 网页全屏轮询间隔毫秒数，用于检测 B 站播放器网页全屏按钮 */
-  api.WEBFULLSCREEN_POLL_INTERVAL = 200;
+  api.WEBFULLSCREEN_POLL_INTERVAL = 50;
   /** @constant {number} 网页全屏超时毫秒数，超过此时间放弃轮询 */
   api.WEBFULLSCREEN_TIMEOUT_MS = 10000;
   /** @constant {string[]} iframe 内需要隐藏的 B 站页面元素 CSS 选择器列表 */
