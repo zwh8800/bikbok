@@ -126,7 +126,7 @@
        if (api.overlay) api.showTitleBriefly();
        return;
      }
-     // Z 键：点赞
+     // Z 键：点赞/取消点赞
      if (e.key === 'z' || e.key === 'Z') {
        if (!api.overlay) return;
        e.preventDefault();
@@ -134,9 +134,12 @@
        var activeIfr = api.getActiveIframe();
        if (activeIfr && activeIfr.contentDocument) {
          var likeBtn = activeIfr.contentDocument.querySelector('.video-like.video-toolbar-left-item');
-         if (likeBtn) likeBtn.click();
+         if (likeBtn) {
+           var wasLiked = likeBtn.classList.contains('on');
+           likeBtn.click();
+           api.showLikeIndicator(!wasLiked);
+         }
        }
-       api.showLikeIndicator();
        return;
      }
      // C 键：收藏

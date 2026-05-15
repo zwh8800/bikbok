@@ -214,17 +214,16 @@
    /**
     * 在覆盖层中央显示点赞动效（Z 键触发）
     *
-    * 显示格式："❤️ 已点赞"，1.5 秒后自动移除。
-    *
+    * @param {boolean} liked - 是否已点赞状态
     * @returns {void}
     */
-   api.showLikeIndicator = function () {
+   api.showLikeIndicator = function (liked) {
      if (!api.overlay) return;
      var prev = api.overlay.querySelector('.bikbok-like-indicator');
      if (prev) prev.remove();
      var el = document.createElement('div');
      el.className = 'bikbok-like-indicator';
-     el.textContent = '❤️ 已点赞';
+     el.textContent = liked ? '❤️ 已点赞' : '已取消点赞';
      api.overlay.appendChild(el);
      setTimeout(function () { if (el.parentNode) el.remove(); }, 1500);
    };
