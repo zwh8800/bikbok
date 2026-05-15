@@ -210,7 +210,9 @@
       var activeIfr = $.getActiveIframe();
       if (activeIfr && activeIfr.contentDocument) {
         var wideBtn = activeIfr.contentDocument.querySelector('.bpx-player-ctrl-web');
-        if (wideBtn && wideBtn.classList.contains('bpx-state-entered')) wideBtn.click();
+        var playerContainer = activeIfr.contentDocument.querySelector('.bpx-player-container');
+        var isWebFullscreen = playerContainer && playerContainer.getAttribute('data-screen') === 'web';
+        if (wideBtn && isWebFullscreen) wideBtn.click();
       }
       // 7. 移除覆盖层
       $.overlay.parentNode.removeChild($.overlay);

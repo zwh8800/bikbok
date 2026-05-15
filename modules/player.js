@@ -340,15 +340,23 @@
       var currentDoc = activeIfr && activeIfr.contentDocument;
       if (!currentDoc) { clearInterval(api.setupTimerId); api.setupTimerId = null; return; }
       var wideBtn = currentDoc.querySelector('.bpx-player-ctrl-web');
+      var playerContainer = currentDoc.querySelector('.bpx-player-container');
+      // 使用 data-screen="web" 属性判断是否已进入网页全屏
+      // 这是比按钮上的 bpx-state-entered 类更可靠的状态标记
+      var isWebFullscreen = playerContainer && playerContainer.getAttribute('data-screen') === 'web';
       if (wideBtn) {
-        clearInterval(api.setupTimerId); api.setupTimerId = null;
-        // 找到网页全屏按钮后自动触发
-        if (!wideBtn.classList.contains('bpx-state-entered')) wideBtn.click();
-        api.injectIframeHideStyles(currentDoc);
-        api.attachVideoEndedListener(currentDoc, api.activeSlot);
-        api.slotReady[api.activeSlot] = true;
-        api.finishLoad();
-        api.ensurePreloads();
+        if (isWebFullscreen) {
+          // ✓ 验证已进入网页全屏，结束轮询
+          clearInterval(api.setupTimerId); api.setupTimerId = null;
+          api.injectIframeHideStyles(currentDoc);
+          api.attachVideoEndedListener(currentDoc, api.activeSlot);
+          api.slotReady[api.activeSlot] = true;
+          api.finishLoad();
+          api.ensurePreloads();
+        } else {
+          // ✗ 未进入全屏，点击触发，下一轮（50ms后）验证是否生效
+          wideBtn.click();
+        }
       } else if (pollCount >= maxPolls) {
         // 超时仍继续：即使没有网页全屏，也要注入样式并完成加载
         clearInterval(api.setupTimerId); api.setupTimerId = null;
@@ -441,9 +449,11 @@
       var doc = ifr.contentDocument;
       var video = doc.querySelector('video');
       if (video) { video.currentTime = 0; video.muted = false; video.play().catch(function () {}); }
-      // 先尝试立即触发网页全屏
+      // 先尝试立即触发网页全屏（如果未进入）
       var wideBtn = doc.querySelector('.bpx-player-ctrl-web');
-      if (wideBtn && !wideBtn.classList.contains('bpx-state-entered')) wideBtn.click();
+      var playerContainer = doc.querySelector('.bpx-player-container');
+      var isWebFullscreen = playerContainer && playerContainer.getAttribute('data-screen') === 'web';
+      if (wideBtn && !isWebFullscreen) wideBtn.click();
       api.injectIframeHideStyles(doc);
       api.attachVideoEndedListener(doc, slot);
       // forwardKeys 需与 setupPlayerInIframe 中的列表保持同步
@@ -480,13 +490,19 @@
           return;
         }
         var btn = currentDoc.querySelector('.bpx-player-ctrl-web');
+        var playerContainer = currentDoc.querySelector('.bpx-player-container');
+        // 使用 data-screen="web" 属性判断是否已进入网页全屏
+        var isWebFullscreen = playerContainer && playerContainer.getAttribute('data-screen') === 'web';
         if (btn) {
-          // 找到按钮后触发（如果还没进入全屏状态）
-          if (!btn.classList.contains('bpx-state-entered')) btn.click();
-          // 全屏触发成功，显示 iframe 并隐藏 loading
-          clearInterval(webFullscreenTimer);
-          ifr.style.opacity = '1';
-          if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
+          if (isWebFullscreen) {
+            // ✓ 验证已进入网页全屏，显示内容并结束轮询
+            clearInterval(webFullscreenTimer);
+            ifr.style.opacity = '1';
+            if (api.loadingEl) api.loadingEl.classList.add('bikbok-loading-hidden');
+          } else {
+            // ✗ 未进入全屏，点击触发，下一轮（50ms后）验证是否生效
+            btn.click();
+          }
         } else if (pollCount >= maxPolls) {
           // 超时终止（即使不进入全屏，视频仍可播放）
           clearInterval(webFullscreenTimer);
@@ -521,7 +537,6 @@
     if (!api.isForwardReady()) return;
     api.iframeLoadGen++;
     api.slotGen[api.activeSlot]++;
-    var gen = api.iframeLoadGen;
     // 清理旧定时器
     if (api.setupTimerId !== null) { clearInterval(api.setupTimerId); api.setupTimerId = null; }
     if (api.loadingTimeoutId !== null) { clearTimeout(api.loadingTimeoutId); api.loadingTimeoutId = null; }
@@ -535,6 +550,7 @@
     // 暂停旧 activeSlot 的视频
     pauseAndBlockSlot(oldActive);
     api.slotGen[oldForward]++;
+    var gen = api.slotGen[oldForward];  // 使用槽位自己的代数，不是全局 iframeLoadGen
 
     // 槽位角色轮换：active ← forward, backward ← active, forward ← backward（或空闲）
     api.activeSlot = oldForward;
@@ -580,7 +596,6 @@
     if (!api.isBackwardReady()) return;
     api.iframeLoadGen++;
     api.slotGen[api.activeSlot]++;
-    var gen = api.iframeLoadGen;
     // 清理旧定时器
     if (api.setupTimerId !== null) { clearInterval(api.setupTimerId); api.setupTimerId = null; }
     if (api.loadingTimeoutId !== null) { clearTimeout(api.loadingTimeoutId); api.loadingTimeoutId = null; }
@@ -594,6 +609,7 @@
     // 暂停旧 activeSlot 的视频
     pauseAndBlockSlot(oldActive);
     api.slotGen[oldBackward]++;
+    var gen = api.slotGen[oldBackward];  // 使用槽位自己的代数，不是全局 iframeLoadGen
 
     // 槽位角色轮换：active ← backward, forward ← active, backward ← forward（或空闲）
     api.activeSlot = oldBackward;
