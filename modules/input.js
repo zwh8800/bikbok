@@ -2,7 +2,7 @@
  * bikbok — 输入处理模块
  *
  * 处理所有用户输入事件：
- *   - onKeyDown(): 键盘事件（↑↓ 导航 / ← → 进度 / F 全屏 / I O 倍速 / B 退出 / Escape 关闭）
+ *   - onKeyDown(): 键盘事件（↑↓ 导航 / ← → 进度 + 标题 / Enter 主动播放暂停 + 标题 / Space 播放暂停 + 标题 / I O 倍速 + 标题 / F 全屏 / B 退出 / Escape 关闭）
  *   - onMessage(): postMessage 事件（监听 B 站播放器发出的 video_ended）
  *   - onBikbokKey(): postMessage 转发（iframe 内按键通过 postMessage 传递到父窗口）
  *   - toggleFullscreen(): 浏览器全屏切换
@@ -38,13 +38,14 @@
    * 按键处理顺序（按优先级）：
    *   1. Escape — 退出 TikTok 模式（全屏状态时先退出全屏再退出覆盖层）
    *   2. F / Shift+F — 切换浏览器全屏
-   *   3. I — 降低倍速（-0.25x，范围 0.25-3.0x）
-   *   4. O — 提高倍速（+0.25x，范围 0.25-3.0x）
+   *   3. I — 降低倍速（-0.25x）+ 显示倍速指示器 + 显示标题
+   *   4. O — 提高倍速（+0.25x）+ 显示倍速指示器 + 显示标题
    *   5. B — 全局切换（退出 TikTok 模式）
-   *   6. ← → — 快进快退（透传给 B 站播放器，延迟 100ms 读取进度后显示进度指示器）
-   *   7. Space — 播放/暂停（透传，不拦截）
-   *   8. ↑ — 上一个视频（300ms 防抖）
-   *   9. ↓ — 下一个视频（300ms 防抖）
+   *   6. ← → — 快进快退 + 显示标题 + 延迟 200ms 显示进度指示器
+   *   7. Enter — 主动切换播放/暂停（阻止默认）+ 显示标题
+   *   8. Space — 播放/暂停（透传给 B 站播放器）+ 显示标题
+   *   9. ↑ — 上一个视频（300ms 防抖）
+   *  10. ↓ — 下一个视频（300ms 防抖）
    *
    * @param {KeyboardEvent} e - 键盘事件对象
    * @returns {void}
@@ -72,6 +73,7 @@
       e.stopPropagation();
       var slower = api.adjustSpeed(-api.SPEED_STEP);
       api.showSpeedIndicator(slower);
+      api.showTitleBriefly();
       return;
     }
     // O 键：提高倍速 0.25x
@@ -81,6 +83,7 @@
       e.stopPropagation();
       var faster = api.adjustSpeed(api.SPEED_STEP);
       api.showSpeedIndicator(faster);
+      api.showTitleBriefly();
       return;
     }
     // B 键：全局切换，退出 TikTok 模式
@@ -93,6 +96,7 @@
     // ← → 键：postMessage 异步到达后 B 站播放器 seek 尚未完成，延迟 200ms 确保读取到 seek 后的时间
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       if (!api.overlay) return;
+      api.showTitleBriefly();
       setTimeout(function () {
         var activeIfr = api.getActiveIframe();
         if (!activeIfr || !activeIfr.contentDocument) return;
@@ -101,8 +105,27 @@
       }, 200);
       return;
     }
-    // Space 键：透传给 B 站播放器处理播放/暂停
-    if (e.key === ' ') return;
+    // Enter 键：主动切换 iframe 内视频的播放/暂停，阻止默认行为防止页面滚动
+    if (e.key === 'Enter') {
+      if (!api.overlay) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var activeIfr = api.getActiveIframe();
+      if (activeIfr && activeIfr.contentDocument) {
+        var video = activeIfr.contentDocument.querySelector('video');
+        if (video) {
+          if (video.paused) { video.play().catch(function () {}); }
+          else { video.pause(); }
+        }
+      }
+      api.showTitleBriefly();
+      return;
+    }
+    // Space 键：透传给 B 站播放器处理播放/暂停，同时显示标题
+    if (e.key === ' ') {
+      if (api.overlay) api.showTitleBriefly();
+      return;
+    }
     // 300ms 防抖：防止快速连续按键导致视频切换过猛
     const now = Date.now();
     if (now - api.lastNavTime < api.DEBOUNCE_MS) return;

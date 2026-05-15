@@ -246,7 +246,6 @@
   z-index: 4;
   pointer-events: none;
   -webkit-font-smoothing: antialiased;
-  font-family: monospace;
 }
 
 /* ── 倍速指示器 ──────────────────────────────────────────────

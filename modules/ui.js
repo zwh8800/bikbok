@@ -48,9 +48,9 @@
     api.titleEl = document.createElement('div');
     api.titleEl.className = 'bikbok-title';
     api.overlay.appendChild(api.titleEl);
-    // api.counterEl = document.createElement('div');
-    // api.counterEl.className = 'bikbok-counter';
-    // api.overlay.appendChild(api.counterEl);
+    api.counterEl = document.createElement('div');
+    api.counterEl.className = 'bikbok-counter';
+    api.overlay.appendChild(api.counterEl);
     api.hintsEl = document.createElement('div');
     api.hintsEl.className = 'bikbok-hints';
     api.hintsEl.textContent = '↑ ↓ 切换视频\n← → 快进快退\nSpace 播放/暂停\nF 全屏\nI O 倍速\nEsc 退出';
@@ -59,10 +59,9 @@
   };
 
   /**
-   * 更新覆盖层 UI（标题、计数器）
+   * 更新覆盖层 UI（标题 + 计数器 "N / M"）
    *
-   * 当前仅更新标题（通过 textContent 防止 XSS），
-   * 计数器代码已注释保留（调试时可恢复）。
+   * 更新标题（通过 textContent 防止 XSS）和右上角计数指示器（仅视频数 > 1 时显示）。
    *
    * @param {number} index - 当前视频在 videos 数组中的索引
    * @returns {void}
@@ -71,15 +70,14 @@
     const video = api.videos[index];
     if (!video) return;
     if (api.titleEl) api.titleEl.textContent = video.title;
-    // 计数器已注释（保留代码便于调试时恢复），当前仅更新标题
-    // if (api.counterEl) {
-    //   if (api.videos.length > 1) {
-    //     api.counterEl.textContent = `${index + 1} / ${api.videos.length}`;
-    //     api.counterEl.style.display = '';
-    //   } else {
-    //     api.counterEl.style.display = 'none';
-    //   }
-    // }
+    if (api.counterEl) {
+      if (api.videos.length > 1) {
+        api.counterEl.textContent = `${index + 1} / ${api.videos.length}`;
+        api.counterEl.style.display = '';
+      } else {
+        api.counterEl.style.display = 'none';
+      }
+    }
   };
 
   /**
