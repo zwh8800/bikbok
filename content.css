@@ -258,18 +258,51 @@
 
 /* ── 倍速指示器 ──────────────────────────────────────────────
  * 居中显示当前播放倍速，半透明深色背景，短暂显示后自动消失 */
-#bikbok-overlay .bikbok-speed-indicator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.7);
-  color: #fff;
-  font-size: 32px;
-  font-weight: 600;
-  padding: 12px 24px;
-  border-radius: 8px;
-  z-index: 4;
-  pointer-events: none;
-  -webkit-font-smoothing: antialiased;
-}
+ #bikbok-overlay .bikbok-speed-indicator {
+   position: absolute;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   background: rgba(0, 0, 0, 0.7);
+   color: #fff;
+   font-size: 32px;
+   font-weight: 600;
+   padding: 12px 24px;
+   border-radius: 8px;
+   z-index: 4;
+   pointer-events: none;
+   -webkit-font-smoothing: antialiased;
+ }
+
+ /* ── 点赞指示器 ──────────────────────────────────────────────
+  * 居中显示点赞动效（❤️ 已点赞），短暂显示后自动消失 */
+ #bikbok-overlay .bikbok-like-indicator {
+   position: absolute;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   background: rgba(0, 0, 0, 0.7);
+   color: #fff;
+   font-size: 32px;
+   font-weight: 600;
+   padding: 12px 24px;
+   border-radius: 8px;
+   z-index: 4;
+   pointer-events: none;
+   -webkit-font-smoothing: antialiased;
+   animation: bikbok-like-pop 0.3s ease-out;
+ }
+
+ @keyframes bikbok-like-pop {
+   0% {
+     transform: translate(-50%, -50%) scale(0.5);
+     opacity: 0;
+   }
+   50% {
+     transform: translate(-50%, -50%) scale(1.1);
+   }
+   100% {
+     transform: translate(-50%, -50%) scale(1);
+     opacity: 1;
+   }
+ }

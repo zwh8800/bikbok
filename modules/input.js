@@ -136,6 +136,7 @@
          var likeBtn = activeIfr.contentDocument.querySelector('.video-like.video-toolbar-left-item');
          if (likeBtn) likeBtn.click();
        }
+       api.showLikeIndicator();
        return;
      }
      // C 键：收藏

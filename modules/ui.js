@@ -53,7 +53,7 @@
     api.overlay.appendChild(api.counterEl);
     api.hintsEl = document.createElement('div');
     api.hintsEl.className = 'bikbok-hints';
-    api.hintsEl.textContent = '↑ ↓ 切换视频\n← → 快进快退\nSpace 播放/暂停\nF 全屏\nI O 倍速\nEsc 退出';
+     api.hintsEl.textContent = '↑ ↓ 切换视频\n← → 快进快退\nSpace 播放/暂停\nF 全屏\nI O 倍速\nZ 点赞 · C 收藏\nEsc 退出';
     api.overlay.appendChild(api.hintsEl);
     document.body.appendChild(api.overlay);
   };
@@ -199,17 +199,35 @@
    * @param {number} speed - 当前播放速率
    * @returns {void}
    */
-  api.showSpeedIndicator = function (speed) {
-    if (!api.overlay) return;
-    var prev = api.overlay.querySelector('.bikbok-speed-indicator');
-    if (prev) prev.remove();
-    clearTimeout(api.speedIndicatorTimer);
-    var el = document.createElement('div');
-    el.className = 'bikbok-speed-indicator';
-    el.textContent = speed + 'x';
-    api.overlay.appendChild(el);
-    api.speedIndicatorTimer = setTimeout(function () { if (el.parentNode) el.remove(); }, 1500);
-  };
+   api.showSpeedIndicator = function (speed) {
+     if (!api.overlay) return;
+     var prev = api.overlay.querySelector('.bikbok-speed-indicator');
+     if (prev) prev.remove();
+     clearTimeout(api.speedIndicatorTimer);
+     var el = document.createElement('div');
+     el.className = 'bikbok-speed-indicator';
+     el.textContent = speed + 'x';
+     api.overlay.appendChild(el);
+     api.speedIndicatorTimer = setTimeout(function () { if (el.parentNode) el.remove(); }, 1500);
+   };
+
+   /**
+    * 在覆盖层中央显示点赞动效（Z 键触发）
+    *
+    * 显示格式："❤️ 已点赞"，1.5 秒后自动移除。
+    *
+    * @returns {void}
+    */
+   api.showLikeIndicator = function () {
+     if (!api.overlay) return;
+     var prev = api.overlay.querySelector('.bikbok-like-indicator');
+     if (prev) prev.remove();
+     var el = document.createElement('div');
+     el.className = 'bikbok-like-indicator';
+     el.textContent = '❤️ 已点赞';
+     api.overlay.appendChild(el);
+     setTimeout(function () { if (el.parentNode) el.remove(); }, 1500);
+   };
 
   /**
    * 短暂显示视频标题（视频切换后触发）
