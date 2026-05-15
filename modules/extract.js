@@ -107,7 +107,11 @@
           return tryRefill();
         });
       }
-      return tryRefill().then(function (result) { api.refillPromise = null; return result; });
+      return tryRefill().then(function (result) {
+        api.refillPromise = null;
+        if (result > 0) api.refreshAttempts = 0;
+        return result;
+      });
     })();
     return api.refillPromise;
   };
