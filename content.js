@@ -194,6 +194,7 @@
     if ($.setupTimerId !== null) { clearInterval($.setupTimerId); $.setupTimerId = null; }
     if ($.loadingTimeoutId !== null) { clearTimeout($.loadingTimeoutId); $.loadingTimeoutId = null; }
     if ($.progressIndicatorTimer !== null) { clearTimeout($.progressIndicatorTimer); $.progressIndicatorTimer = null; }
+    if ($.counterTimerId !== null) { clearTimeout($.counterTimerId); $.counterTimerId = null; }
     for (var t = 0; t < 3; t++) {
       if ($.earlyMuteTimerIds[t] !== null) { clearInterval($.earlyMuteTimerIds[t]); $.earlyMuteTimerIds[t] = null; }
     }

@@ -3,10 +3,10 @@
  *
  * 负责所有 UI 元素的创建和更新：
  *   - createOverlay(): 构建全屏覆盖层 + 三槽位 iframe + 标题 + 提示
- *   - updateUI(): 更新视频标题（计数器已注释保留）
+ *   - updateUI(): 更新视频标题 + 计数器（3s 自动渐隐）
  *   - 消息提示：showMessage/showEndMessage/removeEndMessage
  *   - 指示器：showProgressIndicator（← → 进度）/ showSpeedIndicator（I O 倍速）
- *   - 标题显示：showTitleBriefly（3 秒后自动渐隐）
+ *   - 短暂显示：showTitleBriefly（标题）/ showCounterBriefly（计数器）
  *
  * @module modules/ui
  * @requires window.__bikbok (state.js)
@@ -74,6 +74,7 @@
       if (api.videos.length > 1) {
         api.counterEl.textContent = `${index + 1} / ${api.videos.length}`;
         api.counterEl.style.display = '';
+        api.showCounterBriefly();
       } else {
         api.counterEl.style.display = 'none';
       }
@@ -242,6 +243,23 @@
     api.titleEl.classList.remove('bikbok-title-hidden');
     api.titleTimerId = setTimeout(function () {
       if (api.titleEl) api.titleEl.classList.add('bikbok-title-hidden');
+    }, 3000);
+  };
+
+  /**
+   * 短暂显示视频计数指示器（计数器变化后触发）
+   *
+   * 添加 .bikbok-counter-visible 类使计数器可见，
+   * 3 秒后自动移除该类触发 opacity 渐隐。
+   *
+   * @returns {void}
+   */
+  api.showCounterBriefly = function () {
+    if (!api.counterEl) return;
+    clearTimeout(api.counterTimerId);
+    api.counterEl.classList.add('bikbok-counter-visible');
+    api.counterTimerId = setTimeout(function () {
+      if (api.counterEl) api.counterEl.classList.remove('bikbok-counter-visible');
     }, 3000);
   };
 

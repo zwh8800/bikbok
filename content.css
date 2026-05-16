@@ -75,7 +75,7 @@
 }
 
 /* ── 视频计数器（右上角 "N / M"） ────────────────────────────
- * 半透明深色背景，圆角胶囊形状，等宽字体 */
+ * 半透明深色背景，圆角胶囊形状，变化后短暂显示 3s 自动渐隐 */
 #bikbok-overlay .bikbok-counter {
   position: absolute;
   top: 16px;
@@ -85,11 +85,16 @@
   border-radius: 12px;
   color: rgba(255, 255, 255, 0.8);
   font-size: 13px;
-  font-family: monospace;
   line-height: 1;
   pointer-events: none;
   z-index: 2;
   -webkit-font-smoothing: antialiased;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+#bikbok-overlay .bikbok-counter-visible {
+  opacity: 1;
 }
 
 /* ── 键盘操作提示 ────────────────────────────────────────────
