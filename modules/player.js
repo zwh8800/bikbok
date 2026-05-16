@@ -42,14 +42,27 @@
     if (api.loadingTimeoutId !== null) { clearTimeout(api.loadingTimeoutId); api.loadingTimeoutId = null; }
     if (api.setupTimerId !== null) { clearInterval(api.setupTimerId); api.setupTimerId = null; }
     api.loadingEl.classList.remove('bikbok-loading-hidden');
-    api.getActiveIframe().style.opacity = '0';  // 隐藏旧 iframe 避免闪烁
-    // 暂停旧活动槽位的视频，避免同时播放
     var oldIfr = api.getActiveIframe();
+    oldIfr.style.opacity = '0';  // 隐藏旧 iframe 避免闪烁
+    // 暂停旧活动槽位的视频，避免同时播放
     if (oldIfr && oldIfr.contentDocument) {
       var oldVideo = oldIfr.contentDocument.querySelector('video');
       if (oldVideo) { oldVideo.pause(); oldVideo.muted = true; }
     }
-    api.getActiveIframe().src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
+    // ★ 创建全新 iframe 替换旧的：这是销毁旧 browsing context（含 B站所有
+    //    定时器、WebSocket、全局变量）最可靠的方式，彻底杜绝内存泄漏
+    var newIfr = document.createElement('iframe');
+    newIfr.className = 'bikbok-player bikbok-player-active';
+    newIfr.setAttribute('allow', 'autoplay; fullscreen');
+    if (oldIfr && oldIfr.parentNode) { oldIfr.parentNode.replaceChild(newIfr, oldIfr); }
+    if (oldIfr) { try { oldIfr.src = 'about:blank'; } catch (e) {} }
+    api.iframes[api.activeSlot] = newIfr;
+    api.iframe = newIfr;
+    (function (s) {
+      newIfr.addEventListener('load', function () { api.onIframeLoad(s); });
+      newIfr.addEventListener('error', function () { api.onIframeError(s); });
+    })(api.activeSlot);
+    newIfr.src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
     api.updateUI(index);
     // 15 秒超时兜底：无论是否加载完都显示 iframe
     api.loadingTimeoutId = setTimeout(function () {
@@ -108,7 +121,18 @@
     if (!video) return;
     // 提前静音，防止 src 加载瞬间音频泄露
     api.immediatelyMuteIframe(ifr);
-    ifr.src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
+    // ★ 创建全新 iframe 替换旧的：销毁旧 browsing context 彻底杜绝内存泄漏
+    var newIfr = document.createElement('iframe');
+    newIfr.className = 'bikbok-player bikbok-player-preload';
+    newIfr.setAttribute('allow', 'autoplay; fullscreen');
+    if (ifr && ifr.parentNode) { ifr.parentNode.replaceChild(newIfr, ifr); }
+    if (ifr) { try { ifr.src = 'about:blank'; } catch (e) {} }
+    api.iframes[slot] = newIfr;
+    (function (s) {
+      newIfr.addEventListener('load', function () { api.onIframeLoad(s); });
+      newIfr.addEventListener('error', function () { api.onIframeError(s); });
+    })(slot);
+    newIfr.src = 'https://www.bilibili.com/video/' + encodeURIComponent(video.bvid) + '/';
     var maxPolls = Math.floor(15000 / 50);
     var pollCount = 0;
     // 每 50ms 轮询静音，防御 SPA 动态加载过程
@@ -119,7 +143,7 @@
         return;
       }
       pollCount++;
-      api.immediatelyMuteIframe(ifr);
+      api.immediatelyMuteIframe(newIfr);
       if (pollCount >= maxPolls) {
         clearInterval(api.earlyMuteTimerIds[slot]);
         api.earlyMuteTimerIds[slot] = null;
@@ -183,6 +207,9 @@
    * @returns {void}
    */
   api.onIframeLoad = function (slot) {
+    // 跳过 about:blank 中间页面的 load 事件，仅用于清空旧文档
+    var ifr = api.iframes[slot];
+    if (ifr && ifr.src === 'about:blank') return;
     if (slot === api.activeSlot) {
       var gen = api.slotGen[api.activeSlot];
       api.setupPlayerInIframe(gen);
