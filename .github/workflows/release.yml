@@ -1,0 +1,53 @@
+name: Build & Release CRX
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate manifest version matches tag
+        run: |
+          MANIFEST_VER=$(jq -r '.version' manifest.json)
+          TAG_VER="${{ steps.version.outputs.version }}"
+          if [ "$MANIFEST_VER" != "$TAG_VER" ]; then
+            echo "ERROR: manifest.json version ($MANIFEST_VER) != tag version ($TAG_VER)"
+            echo "Please update manifest.json version before tagging."
+            exit 1
+          fi
+          echo "Version check passed: $TAG_VER"
+
+      - name: Package extension files
+        run: |
+          zip -r extension.zip \
+            manifest.json \
+            content.js \
+            content.css \
+            modules/ \
+            icons/
+
+      - name: Build signed CRX
+        id: build-crx
+        uses: cardinalby/webext-buildtools-chrome-crx-action@v2
+        with:
+          zipFilePath: extension.zip
+          crxFilePath: bikbok-v${{ steps.version.outputs.version }}.crx
+          privateKey: ${{ secrets.CRX_PRIVATE_KEY }}
+
+      - name: Upload CRX to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bikbok-v${{ steps.version.outputs.version }}.crx
+          generate_release_notes: true
